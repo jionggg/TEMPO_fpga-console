@@ -1,0 +1,24 @@
+# ---- Vivado generated output (rebuilt from .xpr + .srcs) ----
+.Xil/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+
+# ---- Vivado logs, journals, crash dumps ----
+*.jou
+*.log
+*.str
+*.backup.*
+hs_err_pid*
+vivado_pid*
+webtalk*
+usage_statistics_webtalk.*
+dfx_runtime.txt
+
+# ---- OS / editor clutter ----
+.DS_Store
+Thumbs.db
+desktop.ini
