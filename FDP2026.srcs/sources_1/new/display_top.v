@@ -1,0 +1,134 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 25.10.2026 12:07:34
+// Design Name: 
+// Module Name: display_top
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: Member D (Ji Yong) static layout graphics for OLEDs
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+// to check both OLEDs, the pin map and the colours before any game logic:
+//   ribbon (navy, y 0-10), lane dividers, white hit line (y 55), idle pads (y 57-63),
+//   one parked tile per lane (piano cyan, 5 lanes; drum orange, 3 lanes:
+//   crash | snare | bass). Lane codes come from tempo_defs.vh.
+// Next steps from the plan: mock_feed + input_select, falling tiles, score ribbon,
+// judgement flashes. All inputs below are already wired from the top.
+//
+// The colour logic is combinational in pixel_index: the OLED asks about a pixel and
+// gets an answer straight away (see "The OLED asks, you answer" in the plan).
+//////////////////////////////////////////////////////////////////////////////////
+
+module display_top (
+    input              clk,
+    input              rst,
+    input              ms_tick,
+    input              sw_mock,
+    // from Meiyi
+    input  [2:0]       game_state,
+    input  [1:0]       countdown_num,
+    input  [17:0]      song_time_ms,
+    input  [17:0]      song_len_ms,
+    input  [7:0]       pno_ev_valid,
+    input  [8*18-1:0]  pno_ev_time,
+    input  [8*3-1:0]   pno_ev_lane,
+    input  [7:0]       pno_ev_sync,
+    input  [7:0]       drm_ev_valid,
+    input  [8*18-1:0]  drm_ev_time,
+    input  [8*3-1:0]   drm_ev_lane,
+    input  [7:0]       drm_ev_sync,
+    input  [15:0]      pno_score,
+    input  [15:0]      drm_score,
+    input  [7:0]       pno_combo,
+    input  [7:0]       drm_combo,
+    input  [1:0]       difficulty,
+    // from Pei Ling
+    input              judge_pulse,
+    input              judge_player,
+    input  [1:0]       judge_grade,
+    input  [2:0]       judge_lane,
+    input              sync_pulse,
+    input              sync_ok,
+    // OLED drivers
+    input  [12:0]      pno_index,
+    output [15:0]      pno_colour,
+    input  [12:0]      drm_index,
+    output [15:0]      drm_colour
+    );
+    
+    
+    // rotate 180 degrees by reversing px order
+    localparam ROTATE_PNO = 0, ROTATE_DRM = 1;     
+    wire [12:0] pno_idx = ROTATE_PNO ? 13'd6143 - pno_index : pno_index;
+    wire [12:0] drm_idx = ROTATE_DRM ? 13'd6143 - drm_index : drm_index;
+    screen_layout #(.SCREEN(0)) piano_screen (.pixel_index(pno_idx), .colour(pno_colour));
+    screen_layout #(.SCREEN(1)) drum_screen  (.pixel_index(drm_idx), .colour(drm_colour));
+
+endmodule
+
+
+// One copy per screen. SCREEN = 0 piano (5 lanes), 1 drum (3 lanes).
+module screen_layout #(parameter SCREEN = 0) (
+    input      [12:0] pixel_index,
+    output reg [15:0] colour
+    );
+
+    `include "tempo_defs.vh"
+
+    localparam NAVY = 16'h0010, WHITE = 16'hFFFF, DIVIDER = 16'h2104, PAD = 16'h18E3,
+               CYAN = 16'h07FF, ORANGE = 16'hFD00, BLACK = 16'h0000;
+    localparam RIBBON_H = 11, HIT_Y = 55, PAD_Y0 = 57;
+
+    wire [6:0] x = pixel_index % 96;      // 0..95, left to right
+    wire [5:0] y = pixel_index / 96;      // 0..63, top to bottom
+
+    // which lane is this pixel's column in? (tile area only, not the divider)
+    reg       in_lane;
+    reg [2:0] lane;
+    always @(*) begin
+        in_lane = 1'b0;
+        lane    = 3'd0;
+        if (SCREEN == 0) begin
+            // 5 piano lanes, 19 px each: C | D | E | F | G
+            if      (x >=  1 && x <= 17) begin in_lane = 1'b1; lane = NOTE_C; end
+            else if (x >= 20 && x <= 36) begin in_lane = 1'b1; lane = NOTE_D; end
+            else if (x >= 39 && x <= 55) begin in_lane = 1'b1; lane = NOTE_E; end
+            else if (x >= 58 && x <= 74) begin in_lane = 1'b1; lane = NOTE_F; end
+            else if (x >= 77 && x <= 93) begin in_lane = 1'b1; lane = NOTE_G; end
+        end else begin
+            // 3 drum lanes, 32 px each: crash | snare | bass
+            if      (x >=  2 && x <= 29) begin in_lane = 1'b1; lane = DRUM_CRASH; end
+            else if (x >= 34 && x <= 61) begin in_lane = 1'b1; lane = DRUM_SNARE; end
+            else if (x >= 66 && x <= 93) begin in_lane = 1'b1; lane = DRUM_BASS;  end
+        end
+    end
+
+    wire is_divider = (SCREEN == 0) ? (x == 19 || x == 38 || x == 57 || x == 76)
+                                    : (x == 32 || x == 64);
+
+    // one parked tile per lane, staggered so you can see every lane at once
+    wire [5:0] tile_top = 6'd16 + {lane, 3'b000};          // lane 0 at y 16, lane 4 at y 48
+    wire       on_tile  = in_lane && (y >= tile_top) && (y < tile_top + 4);
+
+    // top layer first; the first test that says yes paints the pixel
+    always @(*) begin
+        if      (y < RIBBON_H)              colour = NAVY;
+        else if (on_tile)                   colour = (SCREEN == 0) ? CYAN : ORANGE;
+        else if (y == HIT_Y)                colour = WHITE;
+        else if (y >= PAD_Y0 && in_lane)    colour = PAD;
+        else if (is_divider)                colour = DIVIDER;
+        else                                colour = BLACK;
+    end
+
+endmodule

@@ -22,7 +22,7 @@
 module flexible_clock_divider(
     input basys_clock,
     output reg slower_clock = 0,
-    output [31:0] my_m_value
+    input [31:0] my_m_value
     );
     
     reg [31:0] count = 0;
