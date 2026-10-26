@@ -87,6 +87,12 @@ module My_Top_Module (
     wire [7:0]  pno_combo, drm_combo;
     wire [1:0]  difficulty;
 
+    // C -> D: sync buff (PROPOSED, not in game_intel yet). Tied to "no buff" until
+    // Meiyi agrees and adds these two outputs; then delete the "= ..." parts and
+    // connect them in member_c below. Rule: see mock_judge in mock_feed.v.
+    wire [3:0]  mult         = 4'd1;      // team multiplier: 1 = no buff, max 9
+    wire [11:0] buff_ms_left = 12'd0;     // ms left on the buff, 0..3000
+
     // B -> C and D: judgements
     wire        judge_pulse;         // 1 clk per judgement
     wire        judge_player;        // 0 piano, 1 drum
@@ -153,6 +159,7 @@ module My_Top_Module (
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
         .difficulty(difficulty),
+        .mult(mult), .buff_ms_left(buff_ms_left),
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
     );
