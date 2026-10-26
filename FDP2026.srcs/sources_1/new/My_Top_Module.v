@@ -14,7 +14,7 @@
 //   2. Board controls
 //   3. Wires between members      (names match the Miro UML)
 //   4. One module per member      (each member edits only their OWN top_module file)
-//   5. Two OLED drivers           (5lane piano on JA, 3lane drum on JB)
+//   5. Two OLED drivers           (5-lane piano on JB, right edge; 3-lane drum on JA, left edge)
 //
 // Team clock rule: every signal passed between members is on clk (100 MHz)
 // and a "pulse" is high for exactly one clk cycle. 
@@ -29,8 +29,8 @@ module My_Top_Module (
     input         btnR,       // reset everything
     input  [15:0] sw,         // sw[0] = use mock_feed (jy's test inputs)
     output [15:0] led,
-    output [7:0]  JA,         // Pmod OLED, piano screen
-    output [7:0]  JB,         // Pmod OLED, drum screen
+    output [7:0]  JA,         // Pmod OLED, drum screen  (left edge of the board)
+    output [7:0]  JB,         // Pmod OLED, piano screen (right edge, next to JC)
     output        mic_cs,     // Pmod MIC on JC pin 1 (JC[0])  - Annanya to confirm
     input         mic_miso,   // Pmod MIC on JC pin 3 (JC[2])
     output        mic_sclk    // Pmod MIC on JC pin 4 (JC[3])
@@ -160,23 +160,25 @@ module My_Top_Module (
     // ---------------------------------------------------------------- 5. OLEDs
     // Pmod OLED pins: 1 cs, 2 sdin, 3 (unused), 4 sclk, 7 d_cn, 8 resn, 9 vccen, 10 pmoden
     // reset must stay 0: the driver powers the screen with pmoden = !reset.
+    // Piano on JB (right hand side), drum on JA. The xdc keeps the board's own
+    // names (port JA = header JA), so the swap lives here and nowhere else.
     Oled_Display oled_piano (
         .clk(clk_6p25M), .reset(1'b0),
         .frame_begin(), .sending_pixels(), .sample_pixel(),
         .pixel_index(pno_index), .pixel_data(pno_colour),
-        .cs(JA[0]), .sdin(JA[1]), .sclk(JA[3]), .d_cn(JA[4]),
-        .resn(JA[5]), .vccen(JA[6]), .pmoden(JA[7])
+        .cs(JB[0]), .sdin(JB[1]), .sclk(JB[3]), .d_cn(JB[4]),
+        .resn(JB[5]), .vccen(JB[6]), .pmoden(JB[7])
     );
-    assign JA[2] = 1'b0;
+    assign JB[2] = 1'b0;
 
     Oled_Display oled_drum (
         .clk(clk_6p25M), .reset(1'b0),
         .frame_begin(), .sending_pixels(), .sample_pixel(),
         .pixel_index(drm_index), .pixel_data(drm_colour),
-        .cs(JB[0]), .sdin(JB[1]), .sclk(JB[3]), .d_cn(JB[4]),
-        .resn(JB[5]), .vccen(JB[6]), .pmoden(JB[7])
+        .cs(JA[0]), .sdin(JA[1]), .sclk(JA[3]), .d_cn(JA[4]),
+        .resn(JA[5]), .vccen(JA[6]), .pmoden(JA[7])
     );
-    assign JB[2] = 1'b0;
+    assign JA[2] = 1'b0;
 
     // ---------------------------------------------------------------- 6. debug
     assign led = {sw_mock, 12'd0, game_state};   // led[2:0] = game_state, led[15] = mock on

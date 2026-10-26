@@ -105,8 +105,8 @@ module tb_top;
         $display("ms ticks so far: %0d at t = %0.3f ms", ticks, $realtime / 1e6);
         $display("first frame received: JA %0d px, JB %0d px at t = %0.3f ms", pixA, pixB, $realtime / 1e6);
         $display("pmoden JA=%b JB=%b, vccen JA=%b JB=%b", JA[7], JB[7], JA[6], JB[6]);
-        write_ppm("frame_JA_piano.ppm", 0);
-        write_ppm("frame_JB_drum.ppm", 1);
+        write_ppm("frame_JA_drum.ppm", 0);     // drum OLED is on JA
+        write_ppm("frame_JB_piano.ppm", 1);    // piano OLED is on JB
         $finish;
     end
     initial begin
