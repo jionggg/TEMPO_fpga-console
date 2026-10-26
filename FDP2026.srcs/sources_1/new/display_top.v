@@ -68,12 +68,51 @@ module display_top (
     );
     
     
+    // // Test mode: sw[0] up = show mock_feed's fake song instead of Meiyi's
+        
+    wire [17:0]  mock_song_time_ms;
+    wire [7:0]   mock_pno_valid, mock_pno_sync, mock_drm_valid, mock_drm_sync;
+    wire [143:0] mock_pno_time,  mock_drm_time;
+    wire [23:0]  mock_pno_lane,  mock_drm_lane;
+
+    mock_feed mock (
+        .clk(clk), .rst(rst), .ms_tick(ms_tick), .enable(sw_mock),
+        .song_time_ms(mock_song_time_ms),
+        .pno_ev_valid(mock_pno_valid), .pno_ev_time(mock_pno_time),
+        .pno_ev_lane(mock_pno_lane),   .pno_ev_sync(mock_pno_sync),
+        .drm_ev_valid(mock_drm_valid), .drm_ev_time(mock_drm_time),
+        .drm_ev_lane(mock_drm_lane),   .drm_ev_sync(mock_drm_sync)
+    );
+
+    // input_select: each "use_" signal is the mock one when sw[0] is up, else Meiyi's
+    wire [17:0]  use_song_time = sw_mock ? mock_song_time_ms : song_time_ms;
+    wire [7:0]   use_pno_valid = sw_mock ? mock_pno_valid    : pno_ev_valid;
+    wire [143:0] use_pno_time  = sw_mock ? mock_pno_time     : pno_ev_time;
+    wire [23:0]  use_pno_lane  = sw_mock ? mock_pno_lane     : pno_ev_lane;
+    wire [7:0]   use_pno_sync  = sw_mock ? mock_pno_sync     : pno_ev_sync;
+    wire [7:0]   use_drm_valid = sw_mock ? mock_drm_valid    : drm_ev_valid;
+    wire [143:0] use_drm_time  = sw_mock ? mock_drm_time     : drm_ev_time;
+    wire [23:0]  use_drm_lane  = sw_mock ? mock_drm_lane     : drm_ev_lane;
+    wire [7:0]   use_drm_sync  = sw_mock ? mock_drm_sync     : drm_ev_sync;
+    
+    
     // rotate 180 degrees by reversing px order
     localparam ROTATE_PNO = 0, ROTATE_DRM = 1;     
     wire [12:0] pno_idx = ROTATE_PNO ? 13'd6143 - pno_index : pno_index;
     wire [12:0] drm_idx = ROTATE_DRM ? 13'd6143 - drm_index : drm_index;
-    screen_layout #(.SCREEN(0)) piano_screen (.pixel_index(pno_idx), .colour(pno_colour));
-    screen_layout #(.SCREEN(1)) drum_screen  (.pixel_index(drm_idx), .colour(drm_colour));
+
+    screen_layout #(.SCREEN(0)) piano_screen (
+        .pixel_index(pno_idx), .song_time_ms(use_song_time),
+        .ev_valid(use_pno_valid), .ev_time(use_pno_time),
+        .ev_lane(use_pno_lane),   .ev_sync(use_pno_sync),
+        .colour(pno_colour)
+    );
+    screen_layout #(.SCREEN(1)) drum_screen (
+        .pixel_index(drm_idx), .song_time_ms(use_song_time),
+        .ev_valid(use_drm_valid), .ev_time(use_drm_time),
+        .ev_lane(use_drm_lane),   .ev_sync(use_drm_sync),
+        .colour(drm_colour)
+    );
 
 endmodule
 
@@ -81,14 +120,16 @@ endmodule
 // One copy per screen. SCREEN = 0 piano (5 lanes), 1 drum (3 lanes).
 module screen_layout #(parameter SCREEN = 0) (
     input      [12:0] pixel_index,
+    input      [17:0]     song_time_ms,
+    input      [7:0]      ev_valid,
+    input      [8*18-1:0] ev_time,
+    input      [8*3-1:0]  ev_lane,
+    input      [7:0]      ev_sync,
     output reg [15:0] colour
     );
 
-    `include "tempo_defs.vh"
-
-    localparam NAVY = 16'h0010, WHITE = 16'hFFFF, DIVIDER = 16'h2104, PAD = 16'h18E3,
-               CYAN = 16'h07FF, ORANGE = 16'hFD00, BLACK = 16'h0000;
-    localparam RIBBON_H = 11, HIT_Y = 55, PAD_Y0 = 57;
+    `include "TEMPO_defs.vh"
+    `include "TEMPO_layout.vh"
 
     wire [6:0] x = pixel_index % 96;      // 0..95, left to right
     wire [5:0] y = pixel_index / 96;      // 0..63, top to bottom
@@ -117,14 +158,20 @@ module screen_layout #(parameter SCREEN = 0) (
     wire is_divider = (SCREEN == 0) ? (x == 19 || x == 38 || x == 57 || x == 76)
                                     : (x == 32 || x == 64);
 
-    // one parked tile per lane, staggered so you can see every lane at once
-    wire [5:0] tile_top = 6'd16 + {lane, 3'b000};          // lane 0 at y 16, lane 4 at y 48
-    wire       on_tile  = in_lane && (y >= tile_top) && (y < tile_top + 4);
+
+    // falling tiles: one tile_calc per screen, same SCREEN setting as this copy
+    wire        on_tile;
+    wire [15:0] tile_colour;
+    tile_calc #(.SCREEN(SCREEN)) tiles (
+        .x(x), .y(y), .song_time_ms(song_time_ms),
+        .ev_valid(ev_valid), .ev_time(ev_time), .ev_lane(ev_lane), .ev_sync(ev_sync),
+        .on_tile(on_tile), .tile_colour(tile_colour)
+    );
 
     // top layer first; the first test that says yes paints the pixel
     always @(*) begin
         if      (y < RIBBON_H)              colour = NAVY;
-        else if (on_tile)                   colour = (SCREEN == 0) ? CYAN : ORANGE;
+        else if (on_tile)                   colour = tile_colour;
         else if (y == HIT_Y)                colour = WHITE;
         else if (y >= PAD_Y0 && in_lane)    colour = PAD;
         else if (is_divider)                colour = DIVIDER;
