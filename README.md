@@ -84,13 +84,8 @@ The is_drum / player bit says which row applies.
 | led[2:0] | `game_state` |
 | led[15] | Mock inputs on (mirrors sw[0]) |
 
-## Known quirks
+## quirks / debug
 
-- **Upside-down screen:** JA hangs the opposite way to JB and JC. `display_top.v` has a
-  `ROTATE_PNO` / `ROTATE_DRM` flag per screen; set a flag to 1 for any screen that is upside down.
-- **Plug OLEDs in before programming.** `Oled_Display` sends its start-up commands only once,
-  right after programming. A screen plugged in later stays black until you reprogram.
-- **Bottom-right pixel:** the course driver paints pixel (95, 63) with pixel 0's colour.
 - **Warnings:** "unconnected" / "undriven" port warnings come from the placeholders and are
   harmless. On Windows, `[Common 17-180] Spawn failed` messages are harmless if the bitstream
   is written; moving the project to a short path with no spaces (e.g. `C:\vivado\tempo`) can
