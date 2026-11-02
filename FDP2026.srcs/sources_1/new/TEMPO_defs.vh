@@ -1,7 +1,7 @@
-// tempo_defs.vh - the codes every TEMPO module agrees on.
+// tempo_defs.vh - str codes every module agrees on
 
 // to call this header file INSIDE a module, after the port list:
-//     `include "tempo_defs.vh"
+//     `include "TEMPO_defs.vh"
 
 // each module that includes it gets its own copy of these localparams, so there is
 // no clash when one file's hardcode is edited. 
