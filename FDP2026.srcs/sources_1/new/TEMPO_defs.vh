@@ -33,10 +33,10 @@ localparam       PIANO_LANES = 5;
 
 // Drums (det_is_drum = 1, exp_is_drum = 1, judge_player = 1): one lane per drum
 // left to right on the drum OLED
-localparam [2:0] DRUM_NONE = 3'd0,    
-                 DRUM_KICK = 3'd1,
-                 DRUM_SNARE = 3'd2,   
-                 DRUM_CRASH  = 3'd3;    
+localparam [2:0] DRUM_CRASH = 3'd0,
+                 DRUM_SNARE = 3'd1,   
+                 DRUM_BASS  = 3'd2,   
+                 DRUM_NONE = 3'd3; 
 localparam       DRUM_LANES = 3;
 
 

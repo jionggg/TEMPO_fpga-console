@@ -20,6 +20,29 @@
 //////////////////////////////////////////////////////////////////////////////////
 // ============================================================================
 
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 30.10.2026 02:31:01
+// Design Name: 
+// Module Name: pattern_gen
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+// ============================================================================
+
+// ============================================================================
 // TEMPO pattern generator
 //
 // Reads the fixed song ROM, creates piano/drum tile pulses, and maintains
@@ -40,8 +63,9 @@
 //   -> Meiyi    (C FSM): song_len_ms
 //   <- Meiyi    (C FSM): song_time_ms
 //
-// Lane codes: piano 0..4 (NOTE_C..NOTE_G); drum 1..3 (KICK, SNARE, CRASH),
-// 0 is DRUM_NONE and is never emitted. The song ROM currently uses no CRASH.
+// Lane codes come from TEMPO_defs.vh: piano NOTE_C..NOTE_G, drums
+// DRUM_CRASH / DRUM_SNARE / DRUM_KICK. DRUM_NONE is never emitted as a lane.
+// The song ROM currently uses no CRASH.
 // ============================================================================
 module pattern_gen (
     input  wire        clk,
@@ -111,8 +135,8 @@ module pattern_gen (
     // The ROM stores the shared lane codes (NOTE_C..NOTE_G = 0..4) directly.
     wire [2:0] rom_piano_lane = rom_piano[2:0];
 
-    // Drum values in the ROM already use the shared lane convention from
-    // TEMPO_defs.vh: 1 = kick, 2 = snare, 3 = crash (0 = none).
+    // The ROM stores the shared drum lane codes from TEMPO_defs.vh directly
+    // (DRUM_CRASH / DRUM_SNARE / DRUM_KICK; DRUM_NONE = no drum in this event).
     // No conversion or randomisation occurs.
     wire [2:0] rom_drum_lane = rom_drum[2:0];
 
@@ -321,4 +345,5 @@ module pattern_gen (
         end
     end
 endmodule
+
 
