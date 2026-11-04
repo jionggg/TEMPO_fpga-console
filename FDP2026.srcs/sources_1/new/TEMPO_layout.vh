@@ -1,3 +1,7 @@
+// TEMPO_layout.vh | v2 | 04 Nov 2026 18:00 SGT
+// v2: LOOKAHEAD_MS renamed TILE_LOOKAHEAD_MS. TEMPO_defs.vh already has a LOOKAHEAD_MS
+//     (Meiyi's 1500 ms spawn time); screen_layout includes both files, so the same
+//     name twice was a 'already declared' compile error.
 // params that screen_layout and tile_calc both need. ie the hit line, tile height and colours
 
 
@@ -8,9 +12,9 @@ localparam PAD_Y0   = 57;     // pads are rows y = 57,...,63
 localparam TILE_H   = 8;      // tiles are 8 rows tall
  
 // Fall speed: 2^SHIFT ms per pixel. SHIFT = 5 -> 32 ms per pixel.
-localparam SHIFT        = 5;
-localparam LOOKAHEAD_MS = (HIT_Y - RIBBON_H) << SHIFT;   // 44 px * 32 ms = 1408 ms of warning
-localparam LATE_MS      = 300;                           // a missed tile keeps falling this long
+localparam SHIFT             = 5;
+localparam TILE_LOOKAHEAD_MS = (HIT_Y - RIBBON_H) << SHIFT;   // 44 px * 32 ms = 1408 ms of warning
+localparam LATE_MS           = 300;                      // a missed tile keeps falling this long
 
 // Colours (RGB565)
 localparam [15:0] BLACK   = 16'h0000,
@@ -19,5 +23,4 @@ localparam [15:0] BLACK   = 16'h0000,
                   DIVIDER = 16'h2104,
                   PAD     = 16'h18E3,
                   CYAN    = 16'h07FF,   // piano tiles
-                  ORANGE  = 16'hFD00;   // drum tiles                  
-                  
+                  ORANGE  = 16'hFD00;   // drum tiles

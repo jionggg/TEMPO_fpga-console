@@ -1,4 +1,8 @@
-// event_detector.v | v3 | 02 Nov 2026 23:40 SGT
+// event_detector.v | v4 | 04 Nov 2026 22:30 SGT
+// v4: timing fix only (results bit-identical to v3). The note jumps d1/d2 for all 8 notes are
+//     now computed in a new state S_DIF and registered, so S_ARG only does one 44-bit compare
+//     per clock (v3 did mux + compare + subtract + compare in one clock and failed timing
+//     in the full team build).
 `timescale 1ns / 1ps
 // Decides drum hits and piano notes from the per-frame features (one frame every 16 ms).
 // It keeps a short history of frames and judges an OLDER frame t once enough later frames
@@ -63,7 +67,8 @@ module event_detector #(
     reg [5:0]  drum_age;             // frames since last drum trigger
 
     localparam S_IDLE=4'd0, S_ARG=4'd1, S_NP=4'd2, S_NC=4'd3, S_ND=4'd4,
-               S_DA=4'd5, S_DB=4'd6, S_DP=4'd7, S_DC=4'd8, S_DD=4'd9;
+               S_DA=4'd5, S_DB=4'd6, S_DP=4'd7, S_DC=4'd8, S_DD=4'd9,
+               S_DIF=4'd10;
     reg [3:0]  st;
     reg [2:0]  idx;
     reg [2:0]  b1, b2;               // loudest note at t (index 2) and at t+2 (index 0)
@@ -78,12 +83,13 @@ module event_detector #(
     reg [43:0] pk, late, late6, sn_win;
     reg        d_trig, c_co, c_codet, c_cokick, c_kick, c_snare;
 
+    // v4: how much each note JUMPED since 3 frames ago (0 if it fell), registered in S_DIF
+    reg  [43:0] d1_r [0:7];          // frame t   (index 2) vs t-3 (index 5)
+    reg  [43:0] d2_r [0:7];          // frame t+2 (index 0) vs t-3 (index 5)
     wire [43:0] s2_idx = S_h[2][idx];
     wire [43:0] s0_idx = S_h[0][idx];
-    wire [43:0] s5_idx = S_h[5][idx];
-    // v3: how much each note JUMPED since 3 frames ago (0 if it fell)
-    wire [43:0] d1_idx = (s2_idx > s5_idx) ? (s2_idx - s5_idx) : 44'd0;
-    wire [43:0] d2_idx = (s0_idx > s5_idx) ? (s0_idx -  s5_idx) : 44'd0;
+    wire [43:0] d1_idx = d1_r[idx];
+    wire [43:0] d2_idx = d2_r[idx];
     wire [43:0] nf_max = (NF_h[2] > NF_h[1]) ? NF_h[2] : NF_h[1];
     wire [43:0] e_max  = (E_h[2] > E_h[1]) ? E_h[2] : E_h[1];
     wire [43:0] sn_a   = (SN_h[11] > SN_h[12]) ? SN_h[11] : SN_h[12];
@@ -107,6 +113,7 @@ module event_detector #(
             d_trig <= 1'b0; c_co <= 1'b0; c_codet <= 1'b0; c_cokick <= 1'b0;
             c_kick <= 1'b0; c_snare <= 1'b0;
             odd0 <= 44'd0; main0 <= 44'd0;
+            for (n = 0; n < 8; n = n + 1) begin d1_r[n] <= 44'd0; d2_r[n] <= 44'd0; end
             for (i = 0; i < 16; i = i + 1) begin
                 NF_h[i] <= 44'd0; SN_h[i] <= 44'd0; T_h[i] <= 32'd0;
             end
@@ -136,7 +143,15 @@ module event_detector #(
                     if (note_age    != 6'd63) note_age    <= note_age + 1'b1;
                     if (drum_age    != 6'd63) drum_age    <= drum_age + 1'b1;
                     idx <= 3'd0;
-                    st  <= S_ARG;
+                    st  <= S_DIF;
+                end
+                // ---- 1b. (v4) note jumps for all 8 notes at once, registered ----
+                S_DIF: begin
+                    for (n = 0; n < 8; n = n + 1) begin
+                        d1_r[n] <= (S_h[2][n] > S_h[5][n]) ? (S_h[2][n] - S_h[5][n]) : 44'd0;
+                        d2_r[n] <= (S_h[0][n] > S_h[5][n]) ? (S_h[0][n] - S_h[5][n]) : 44'd0;
+                    end
+                    st <= S_ARG;
                 end
                 // ---- 2. loudest note in frame t and in frame t+2 (first maximum wins) ----
                 S_ARG: begin

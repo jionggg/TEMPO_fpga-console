@@ -1,29 +1,10 @@
+// tile_calc.v | v2 | 04 Nov 2026 18:00 SGT
+// v2: uses TILE_LOOKAHEAD_MS (renamed in TEMPO_layout.vh v2); include name made TEMPO_layout.vh
 `timescale 1ns / 1ps
 
 // tldr: is pixel (x, y) a falling tile?
 //   tile_slot  checks ONE event slot: "does this one tile cover pixel (x, y)?"
 //   tile_calc  places 8 tile_slots (one per slot) and combines their answers.
-
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 26.10.2026 12:07:48
-// Design Name: 
-// Module Name: tile_calc
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 module tile_calc #(parameter SCREEN = 0) (     // SCREEN: 0 = piano, 1 = drum
     input  [6:0]   x,               // pixel column, 0,...,95 (left to right)
@@ -95,7 +76,7 @@ module tile_slot #(parameter SCREEN = 0) (
     output        white             // ... and the pixel is on a sync tile's rim
     );
 
-    `include "tempo_layout.vh"
+    `include "TEMPO_layout.vh"
  
     localparam OFFSET_MS = 320;                              // keeps the numbers positive
     localparam BASE_Y    = HIT_Y + (OFFSET_MS >> SHIFT);     // 55 + 10 = 65
@@ -107,7 +88,7 @@ module tile_slot #(parameter SCREEN = 0) (
  
     // Is the tile on screen? From 300 ms late (ahead_ms = 20) to 1408 ms early (1728).
     wire in_window = valid && (ahead_ms > OFFSET_MS - LATE_MS)
-                           && (ahead_ms < OFFSET_MS + LOOKAHEAD_MS);
+                           && (ahead_ms < OFFSET_MS + TILE_LOOKAHEAD_MS);
  
     // Convert ms to pixels: shift right by 5 = divide by 32 (32 ms per pixel).
     wire [13:0] steps = ahead_ms >> SHIFT;
