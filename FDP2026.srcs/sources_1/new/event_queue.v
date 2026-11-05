@@ -1,24 +1,13 @@
+// event_queue.v | v2 | 04 Nov 2026 22:45 SGT
+// v2 (timing fix by A for C to review; behaviour unchanged):
+//   - clear is now a plain synchronous clear: "if (rst) ... else if (clear) ...".
+//     v1 had "if (rst || clear)" inside an async-reset block, which mixes a synchronous
+//     signal into the reset condition.
+//   - the four memories are written in their own clocked block (no reset), so Vivado
+//     can build them from LUT RAM instead of hundreds of flip-flops. A push is ignored
+//     during rst or clear, exactly as in v1.
+//   v1 failed timing at 100 MHz in the full team build (paths into the memories).
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 30.10.2026 02:28:09
-// Design Name: 
-// Module Name: event_queue
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 // FIFO for expected events awaiting judgement.
 module event_queue #(
@@ -30,7 +19,7 @@ module event_queue #(
     input  wire        push,
     input  wire [17:0] push_time_ms,
     input  wire [5:0]  push_id,
-    input  wire         push_is_drum,
+    input  wire        push_is_drum,
     input  wire [3:0]  push_note,
     input  wire        pop,
 
@@ -60,20 +49,31 @@ module event_queue #(
     assign head_note    = note_mem[read_ptr];
     assign full         = (item_count == DEPTH);
 
+    // memories: written on a push, never reset (LUT RAM)
+    always @(posedge clk) begin
+        if (do_push && !rst && !clear) begin
+            time_mem[write_ptr] <= push_time_ms;
+            id_mem[write_ptr]   <= push_id;
+            drum_mem[write_ptr] <= push_is_drum;
+            note_mem[write_ptr] <= push_note;
+        end
+    end
+
+    // pointers and count
     always @(posedge clk or posedge rst) begin
-        if (rst || clear) begin
-            read_ptr  <= 6'd0;
-            write_ptr <= 6'd0;
+        if (rst) begin
+            read_ptr   <= 6'd0;
+            write_ptr  <= 6'd0;
+            item_count <= 7'd0;
+        end
+        else if (clear) begin
+            read_ptr   <= 6'd0;
+            write_ptr  <= 6'd0;
             item_count <= 7'd0;
         end
         else begin
-            if (do_push) begin
-                time_mem[write_ptr] <= push_time_ms;
-                id_mem[write_ptr]   <= push_id;
-                drum_mem[write_ptr] <= push_is_drum;
-                note_mem[write_ptr] <= push_note;
+            if (do_push)
                 write_ptr <= write_ptr + 6'd1;
-            end
 
             if (do_pop)
                 read_ptr <= read_ptr + 6'd1;
@@ -86,4 +86,3 @@ module event_queue #(
         end
     end
 endmodule
-

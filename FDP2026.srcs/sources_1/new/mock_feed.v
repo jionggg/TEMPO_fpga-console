@@ -168,3 +168,146 @@ module mock_beat (
 
 endmodule
 
+
+
+//////////////////////////////////////////////////////////////////////////////////
+// mock_judge - a fake Pei Ling and a fake score keeper (Ji Yong)
+//
+// For testing the ribbon, the judgement words and the buff on the board before
+// the real modules exist. It pretends both players hit every note of mock_feed's
+// song as its hit time arrives, with made-up grades:
+//   piano: PERFECT, but GOOD on beats 2, 6, 10, ... and MISS on beats 7, 15, 23, ...
+//   drums: PERFECT on the bass, GOOD on crash and snare, MISS on beats 6, 14, 22, ...
+//   every 4th beat is a sync pair, graded in a cycle of 16 beats:
+//   PERFECT, GOOD, MISS, MISS   (so buffs start, grow, run out and come back)
+// Scores: PERFECT = 100 x mult, GOOD = 50 x mult, MISS = 0.
+//
+// The buff rule (proposed for Meiyi's score keeper; she can copy section 3):
+//   - a good sync pair with no buff running starts one: PERFECT -> x3, GOOD -> x2
+//   - a good sync pair while a buff is running adds +1X (up to x9) and refills 3 s
+//   - when the 3 s run out, the multiplier drops back to x1
+//   - one buff for the whole team: both players' points are multiplied
+//////////////////////////////////////////////////////////////////////////////////
+
+module mock_judge (
+    input              clk,             // 100 MHz
+    input              rst,
+    input              ms_tick,         // 1-cycle pulse every 1 ms
+    input              enable,          // sw[0]
+    input      [17:0]  song_time_ms,    // mock_feed's song clock
+    // like Pei Ling's outputs
+    output reg         judge_pulse  = 0,
+    output reg         judge_player = 0,
+    output reg [1:0]   judge_grade  = 0,
+    output reg [2:0]   judge_lane   = 0,
+    output reg         sync_pulse   = 0,
+    output reg         sync_ok      = 0,
+    // like Meiyi's outputs
+    output reg [15:0]  pno_score    = 0,
+    output reg [15:0]  drm_score    = 0,
+    output reg [3:0]   mult         = 1,
+    output reg [11:0]  buff_ms_left = 0
+    );
+
+    `include "TEMPO_defs.vh"       // GRADE_*, DRUM_BASS
+    `include "TEMPO_layout.vh"     // BUFF_MS
+
+    // ---- 1. Which beat is being judged, and what is on it? ----
+    // Beat n is due at n * 512 ms, so the latest beat whose time has come is
+    // song_time / 512 (a right shift by 9).
+    wire [9:0] now_beat = song_time_ms >> 9;
+
+    reg  [9:0] beat = 0;                // the beat judged most recently
+    wire [2:0] pno_lane, drm_lane;
+    wire       drm_plays, is_sync;
+    mock_beat mb (.beat(beat), .pno_lane(pno_lane), .drm_lane(drm_lane),
+                  .drm_plays(drm_plays), .sync(is_sync));
+
+    // made-up grades for this beat (see the list at the top)
+    wire [1:0] sync_grade = (beat[3:2] == 2'd0) ? GRADE_PERFECT :
+                            (beat[3:2] == 2'd1) ? GRADE_GOOD    :
+                                                  GRADE_MISS;
+    wire [1:0] pno_grade  = is_sync                 ? sync_grade    :
+                            (beat[2:0] == 3'd7)     ? GRADE_MISS    :
+                            (beat[1:0] == 2'd2)     ? GRADE_GOOD    :
+                                                      GRADE_PERFECT;
+    wire [1:0] drm_grade  = is_sync                 ? sync_grade    :
+                            (beat[2:0] == 3'd6)     ? GRADE_MISS    :
+                            (drm_lane == DRUM_BASS) ? GRADE_PERFECT :
+                                                      GRADE_GOOD;
+
+    // points at the current multiplier
+    wire [15:0] pno_points = (pno_grade == GRADE_PERFECT) ? 100 * mult :
+                             (pno_grade == GRADE_GOOD)    ?  50 * mult : 0;
+    wire [15:0] drm_points = (drm_grade == GRADE_PERFECT) ? 100 * mult :
+                             (drm_grade == GRADE_GOOD)    ?  50 * mult : 0;
+
+    // ---- 2. Judge each new beat in 3 steps, one clock each ----
+    // The judge bus carries one judgement per clock, so piano, drum and the sync
+    // pair go out on 3 different clocks, the way Pei Ling's module will send them.
+    reg [1:0] step = 0;                 // 0 waiting, 1 piano, 2 drum, 3 sync pair
+
+    always @(posedge clk) begin
+        judge_pulse <= 0;               // pulses last one clock unless set below
+        sync_pulse  <= 0;
+
+        if (rst || !enable) begin
+            beat <= 0;  step <= 0;
+            pno_score <= 0;  drm_score <= 0;
+            mult <= 1;  buff_ms_left <= 0;
+        end else begin
+            // ---- 3. The buff fuse burns down 1 ms per ms; at 0 it is back to x1 ----
+            if (ms_tick && buff_ms_left != 0) begin
+                buff_ms_left <= buff_ms_left - 1;
+                if (buff_ms_left == 1)
+                    mult <= 1;
+            end
+
+            case (step)
+                2'd0: if (now_beat != beat) begin       // a new beat's time has come
+                          beat <= now_beat;
+                          step <= 2'd1;
+                      end
+                2'd1: begin                              // piano
+                          if (beat >= 4) begin
+                              judge_pulse  <= 1;
+                              judge_player <= 0;
+                              judge_grade  <= pno_grade;
+                              judge_lane   <= pno_lane;
+                              pno_score    <= pno_score + pno_points;
+                          end
+                          step <= 2'd2;
+                      end
+                2'd2: begin                              // drum, if it plays on this beat
+                          if (beat >= 4 && drm_plays) begin
+                              judge_pulse  <= 1;
+                              judge_player <= 1;
+                              judge_grade  <= drm_grade;
+                              judge_lane   <= drm_lane;
+                              drm_score    <= drm_score + drm_points;
+                          end
+                          step <= 2'd3;
+                      end
+                default: begin                           // the sync pair, if this is a sync beat
+                          if (beat >= 4 && is_sync) begin
+                              sync_pulse <= 1;
+                              sync_ok    <= (sync_grade != GRADE_MISS);
+                              // the buff rule. These lines come after section 3, so if
+                              // both happen on the same clock, these win.
+                              if (sync_grade != GRADE_MISS) begin
+                                  buff_ms_left <= BUFF_MS;                         // refill to 3 s
+                                  if (buff_ms_left != 0)                           // already buffed:
+                                      mult <= (mult >= 9) ? 4'd9 : mult + 1;       //   +1X, max x9
+                                  else if (sync_grade == GRADE_PERFECT)            // new buff:
+                                      mult <= 4'd3;                                //   PERFECT x3
+                                  else
+                                      mult <= 4'd2;                                //   GOOD x2
+                              end
+                          end
+                          step <= 2'd0;
+                      end
+            endcase
+        end
+    end
+
+endmodule

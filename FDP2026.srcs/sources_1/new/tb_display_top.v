@@ -82,7 +82,7 @@ module tb_display_top;
         .sync_pulse(sync_pulse), .sync_ok(sync_ok),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
-        .difficulty(difficulty),
+        .difficulty(difficulty), .mult(4'd3), .buff_ms_left(12'd1500),   // x3, half a buff left
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
     );

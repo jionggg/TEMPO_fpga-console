@@ -1,3 +1,13 @@
+// perf_eval_engine.v | v2 | 04 Nov 2026 22:45 SGT
+// v2 (timing fix by A for B to review; judging behaviour unchanged):
+//   - SCAN is pipelined over 3 clocks: P1 reads the candidate's target/lane/flags into
+//     registers, P2 computes the distance, P3 compares with the best so far. Two WAIT
+//     states let the pipeline empty before COMMIT (the search takes 66 clocks, was 64).
+//     Same scan order and strict '<', so the same candidate wins as in v1.
+//   - EXPIRE uses a registered deadline (targets + REPORT_WINDOW) and a registered seen
+//     bit for expire_index, refreshed every clock; resolved is still read live, so an
+//     event resolved in COMMIT is never also expired.
+//   v1 failed timing at 100 MHz by 2.6 ns in the full team build.
 `timescale 1ns / 1ps
 // Normalized song-millisecond / lane-code evaluator.
 // C's expectation heads are LEVELS; each instrument/ID is cached ONCE.
@@ -30,7 +40,7 @@ module perf_eval_engine #(
     output reg det_overflow, output pending
 );
     localparam [1:0] MISS=0, GOOD=1, PERFECT=2;
-    localparam [1:0] IDLE=0, SCAN=1, COMMIT=2, EXPIRE=3;
+    localparam [2:0] IDLE=0, SCAN=1, COMMIT=2, EXPIRE=3, WAIT1=4, WAIT2=5;
     localparam [31:0] REPORT_WINDOW=GOOD_MS+REPORT_DELAY_MS;
     reg [127:0] seen, resolved, emitted;
     reg [63:0] sync_sent;
@@ -42,7 +52,7 @@ module perf_eval_engine #(
     reg [6:0] out_index, expire_index;
     wire [6:0] other={~out_index[6],out_index[5:0]};
 
-    reg [1:0] state;
+    reg [2:0] state;
     reg prefer_drum, active_drum;
     reg [2:0] active_lane;
     reg [31:0] active_time;
@@ -51,9 +61,12 @@ module perf_eval_engine #(
     reg best_found;
     reg [31:0] best_distance;
     wire [6:0] candidate={active_drum,scan};
-    wire [31:0] candidate_time={14'd0,targets[candidate]};
-    wire [31:0] distance=(active_time>=candidate_time) ?
-        active_time-candidate_time : candidate_time-active_time;
+    // v2 scan pipeline registers
+    reg        p1_valid, p1_ok;  reg [6:0] p1_index;  reg [17:0] p1_time;
+    reg        p2_valid, p2_ok;  reg [6:0] p2_index;  reg [31:0] p2_dist;
+    wire [31:0] p1_time32={14'd0,p1_time};
+    // v2 expire look-ahead registers (for the current expire_index)
+    reg        exp_seen_q;  reg [31:0] exp_deadline_q;
     wire [31:0] pair_delta=(hit_times[out_index]>=hit_times[other]) ?
         hit_times[out_index]-hit_times[other] : hit_times[other]-hit_times[out_index];
 
@@ -70,7 +83,7 @@ module perf_eval_engine #(
         .push_data({drum_lane,drum_time_ms}),.ready(dr_ready),
         .pop(take && choose_drum),.head(dr_head),.empty(dr_empty));
     assign pending=|(seen & ~emitted) || !pn_empty || !dr_empty ||
-        state==SCAN || state==COMMIT;
+        state==SCAN || state==WAIT1 || state==WAIT2 || state==COMMIT;
     integer k;
     always @(posedge clk) begin
         judge_pulse<=0; sync_pulse<=0;
@@ -82,6 +95,9 @@ module perf_eval_engine #(
             scan<=0; best_index<=0; best_found<=0; best_distance<=0;
             judge_player<=0; judge_lane<=0; judge_grade<=MISS; judge_id<=0;
             sync_ok<=0; sync_id<=0; det_overflow<=0;
+            p1_valid<=0; p1_ok<=0; p1_index<=0; p1_time<=0;
+            p2_valid<=0; p2_ok<=0; p2_index<=0; p2_dist<=0;
+            exp_seen_q<=0; exp_deadline_q<=0;
             for(k=0;k<128;k=k+1) begin
                 lanes[k]<=0; targets[k]<=0; grades[k]<=MISS; hit_times[k]<=0;
             end
@@ -93,6 +109,12 @@ module perf_eval_engine #(
             if(drm_exp_valid && drm_exp_id!=63 && !seen[di]) begin
                 seen[di]<=1; lanes[di]<=drm_exp_lane; targets[di]<=drm_exp_time_ms;
             end
+            // v2: expire look-ahead for the current expire_index, refreshed every clock.
+            // expire_index only changes in EXPIRE, and EXPIRE is always followed by IDLE,
+            // so these are up to date whenever EXPIRE runs. seen only goes 0 -> 1, so a
+            // stale exp_seen_q can only delay an expiry by one round, never cause one.
+            exp_seen_q<=seen[expire_index];
+            exp_deadline_q<={14'd0,targets[expire_index]}+REPORT_WINDOW;
             if(enable) begin
                 if((note_valid && !pn_ready) || (drum_valid && !dr_ready))
                     det_overflow<=1;
@@ -112,6 +134,20 @@ module perf_eval_engine #(
                     end
                 end
                 out_index<=out_index+1'b1;
+                // v2 scan pipeline: P1 read candidate, P2 distance, P3 compare with best.
+                p1_valid<=(state==SCAN);
+                p1_index<=candidate;
+                p1_time<=targets[candidate];
+                p1_ok<=seen[candidate] && !resolved[candidate] &&
+                       (!active_drum || active_lane==lanes[candidate]);
+                p2_valid<=p1_valid;
+                p2_index<=p1_index;
+                p2_ok<=p1_ok && (active_time<=evaluation_time_ms);
+                p2_dist<=(active_time>=p1_time32) ? active_time-p1_time32 : p1_time32-active_time;
+                if(p2_valid && p2_ok && p2_dist<=GOOD_MS &&
+                   (!best_found || p2_dist<best_distance)) begin
+                    best_found<=1; best_index<=p2_index; best_distance<=p2_dist;
+                end
                 case(state)
                     IDLE: begin
                         if(take) begin
@@ -122,15 +158,12 @@ module perf_eval_engine #(
                         end else state<=EXPIRE;
                     end
                     SCAN: begin
-                        if(seen[candidate] && !resolved[candidate] &&
-                           active_time<=evaluation_time_ms && distance<=GOOD_MS &&
-                           (!active_drum || active_lane==lanes[candidate]) &&
-                           (!best_found || distance<best_distance)) begin
-                            best_found<=1; best_index<=candidate; best_distance<=distance;
-                        end
-                        if(scan==63) state<=COMMIT;
+                        // the candidate is read by the pipeline above
+                        if(scan==63) state<=WAIT1;
                         else scan<=scan+1'b1;
                     end
+                    WAIT1: state<=WAIT2;     // last candidate in P2
+                    WAIT2: state<=COMMIT;    // last candidate compared in P3
                     COMMIT: begin
                         if(best_found) begin
                             resolved[best_index]<=1; hit_times[best_index]<=active_time;
@@ -143,14 +176,15 @@ module perf_eval_engine #(
                     EXPIRE: begin
                         // Service buffered reports before expiring their instrument.
                         // The 250 ms default is a reporting allowance, not a wider hit window.
-                        if(seen[expire_index] && !resolved[expire_index] &&
+                        if(exp_seen_q && !resolved[expire_index] &&
                            (expire_index[6] ? (dr_empty && !drum_valid) : (pn_empty && !note_valid)) &&
-                           evaluation_time_ms>({14'd0,targets[expire_index]}+REPORT_WINDOW)) begin
+                           evaluation_time_ms>exp_deadline_q) begin
                             resolved[expire_index]<=1; grades[expire_index]<=MISS;
                             hit_times[expire_index]<=0;
                         end
                         expire_index<=expire_index+1'b1; state<=IDLE;
                     end
+                    default: state<=IDLE;
                 endcase
             end
         end
