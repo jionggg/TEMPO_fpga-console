@@ -31,7 +31,7 @@
 // ============================================================================
 // TEMPO pattern generator
 //
-// Reads the fixed song ROM, creates piano/drum tile pulses, and maintains
+// Reads the selected song ROM, creates piano/drum tile pulses, and maintains
 // independent expected-event FIFOs for piano and drums.
 //
 // A duet ROM entry is pushed into both FIFOs. This allows performance
@@ -48,6 +48,7 @@
 //                              hit time. Must be captured on clk (100 MHz).
 //   -> Meiyi    (C FSM): song_len_ms
 //   <- Meiyi    (C FSM): song_time_ms
+//   <- Meiyi    (C FSM): song_select, new_game, play_enable
 //
 // Lane codes come from TEMPO_defs.vh: piano NOTE_C..NOTE_G, drums
 // DRUM_CRASH / DRUM_SNARE / DRUM_KICK. DRUM_NONE is never emitted as a lane.
@@ -56,6 +57,9 @@
 module pattern_gen (
     input  wire        clk,
     input  wire        rst,
+    input  wire        new_game,
+    input  wire        play_enable,
+    input  wire [1:0]  song_select,
     input  wire [17:0] song_time_ms,
 
     // Separate judgement IDs are required because piano and drum hits are
@@ -90,23 +94,70 @@ module pattern_gen (
 );
     `include "TEMPO_defs.vh"
 
-    localparam integer TOTAL_EVENTS = TOTAL_NOTES;
-    localparam [17:0] SONG_LENGTH_MS = LAST_NOTE_TIME_MS +
+    // Song 0 is Hot Cross Buns, song 1 is Lightly Row, and song 2 is
+    // Ode to Joy (the original chart moved to song_rom_3).
+    localparam [6:0] SONG0_EVENT_COUNT = 7'd17;
+    localparam [6:0] SONG1_EVENT_COUNT = 7'd49;
+    localparam [6:0] SONG2_EVENT_COUNT = TOTAL_NOTES;
+    localparam [17:0] SONG0_LENGTH_MS = START_TIME_MS +
+                                        (16 * BEAT_INTERVAL_MS) +
+                                        SONG_END_PADDING_MS;
+    localparam [17:0] SONG1_LENGTH_MS = START_TIME_MS +
+                                        (48 * BEAT_INTERVAL_MS) +
+                                        SONG_END_PADDING_MS;
+    localparam [17:0] SONG2_LENGTH_MS = LAST_NOTE_TIME_MS +
                                         SONG_END_PADDING_MS;
 
-    assign song_len_ms = SONG_LENGTH_MS;
+    reg [6:0] selected_event_count;
+    reg [17:0] selected_song_length;
+    always @* begin
+        case (song_select)
+            2'd1: begin
+                selected_event_count = SONG1_EVENT_COUNT;
+                selected_song_length = SONG1_LENGTH_MS;
+            end
+            2'd2: begin
+                selected_event_count = SONG2_EVENT_COUNT;
+                selected_song_length = SONG2_LENGTH_MS;
+            end
+            default: begin
+                selected_event_count = SONG0_EVENT_COUNT;
+                selected_song_length = SONG0_LENGTH_MS;
+            end
+        endcase
+    end
+    assign song_len_ms = selected_song_length;
 
     // ------------------------------------------------------------------------
     // Song ROM and field decoding.
     // ------------------------------------------------------------------------
     reg  [5:0]  rom_addr;
-    wire [31:0] rom_data;
+    wire [31:0] rom0_data, rom1_data, rom2_data;
+    reg  [31:0] rom_data;
     reg  [31:0] rom_data_q = 32'd0;       // v2: registered ROM output
 
-    song_rom u_song_rom (
+    song_rom u_song0 (
         .addr(rom_addr),
-        .event_data(rom_data)
+        .event_data(rom0_data)
     );
+
+    song_rom_2 u_song1 (
+        .addr(rom_addr),
+        .event_data(rom1_data)
+    );
+
+    song_rom_3 u_song2 (
+        .addr(rom_addr),
+        .event_data(rom2_data)
+    );
+
+    always @* begin
+        case (song_select)
+            2'd1:    rom_data = rom1_data;
+            2'd2:    rom_data = rom2_data;
+            default: rom_data = rom0_data;
+        endcase
+    end
 
     always @(posedge clk) rom_data_q <= rom_data;
 
@@ -133,10 +184,11 @@ module pattern_gen (
     // Look-ahead scheduling.
     // ------------------------------------------------------------------------
     reg [17:0] last_song_time_ms;
+    reg [1:0]  song_select_q;
 
     wire song_time_changed = (song_time_ms != last_song_time_ms);
     wire rewound           = (song_time_ms < last_song_time_ms);
-    wire schedule_step     = song_time_changed;
+    wire schedule_step     = song_time_changed && play_enable;
     wire event_missed      = (rom_time_ms < song_time_ms);
     wire event_in_window   = (rom_time_ms >= song_time_ms) &&
                              ((rom_time_ms - song_time_ms) <= LOOKAHEAD_MS);
@@ -218,11 +270,12 @@ module pattern_gen (
                                  (drm_head_id_q == drm_queue_head_id) &&
                                  (song_time_ms > drm_head_deadline);
 
-    wire queue_clear = rewound;
+    wire song_changed = (song_select != song_select_q);
+    wire queue_clear = new_game || song_changed || rewound;
 
-    wire pno_queue_pop = !queue_clear &&
+    wire pno_queue_pop = play_enable && !queue_clear &&
                          (pno_expected_matches || pno_expected_expired);
-    wire drm_queue_pop = !queue_clear &&
+    wire drm_queue_pop = play_enable && !queue_clear &&
                          (drm_expected_matches || drm_expected_expired);
 
     event_queue u_piano_event_queue (
@@ -279,6 +332,7 @@ module pattern_gen (
         if (rst) begin
             rom_addr            <= 6'd0;
             last_song_time_ms   <= 18'd0;
+            song_select_q       <= 2'd0;
             pno_judged_id_seen  <= NO_JUDGEMENT_ID;
             drm_judged_id_seen  <= NO_JUDGEMENT_ID;
             pno_judged_id_was_valid <= 1'b0;
@@ -297,30 +351,36 @@ module pattern_gen (
         else begin
             last_song_time_ms <= song_time_ms;
 
-            if (pno_judged_valid) begin
-                pno_judged_id_seen     <= pno_judged_id;
-                pno_judged_id_was_valid <= 1'b1;
-            end
-            else begin
+            // Changing the menu selection, starting a round, or rewinding
+            // selects a clean chart and discards the old expected-event heads.
+            if (song_changed || new_game || rewound) begin
+                rom_addr                <= 6'd0;
+                song_select_q           <= song_select;
+                pno_judged_id_seen      <= NO_JUDGEMENT_ID;
+                drm_judged_id_seen      <= NO_JUDGEMENT_ID;
                 pno_judged_id_was_valid <= 1'b0;
-            end
-
-            if (drm_judged_valid) begin
-                drm_judged_id_seen     <= drm_judged_id;
-                drm_judged_id_was_valid <= 1'b1;
-            end
-            else begin
                 drm_judged_id_was_valid <= 1'b0;
-            end
+                pno_ev_valid            <= 1'b0;
+                drm_ev_valid            <= 1'b0;
+            end else begin
+                if (pno_judged_valid) begin
+                    pno_judged_id_seen      <= pno_judged_id;
+                    pno_judged_id_was_valid <= 1'b1;
+                end else begin
+                    pno_judged_id_was_valid <= 1'b0;
+                end
 
-            // Spawn outputs are one-clock pulses.
-            pno_ev_valid <= 1'b0;
-            drm_ev_valid <= 1'b0;
+                if (drm_judged_valid) begin
+                    drm_judged_id_seen      <= drm_judged_id;
+                    drm_judged_id_was_valid <= 1'b1;
+                end else begin
+                    drm_judged_id_was_valid <= 1'b0;
+                end
 
-            if (rewound) begin
-                rom_addr <= 6'd0;
-            end
-            else begin
+                // Spawn outputs are one-clock pulses.
+                pno_ev_valid <= 1'b0;
+                drm_ev_valid <= 1'b0;
+
                 if (schedule_valid) begin
                     rom_addr <= rom_addr + 6'd1;
 
@@ -337,13 +397,12 @@ module pattern_gen (
                         drm_ev_lane    <= rom_drum_lane;
                         drm_ev_time_ms <= rom_time_ms;
                     end
-                end
-                else if (schedule_step && event_missed &&
-                         (rom_addr < TOTAL_EVENTS)) begin
+                end else if (schedule_step && event_missed &&
+                             (rom_addr < selected_event_count)) begin
                     // Discard events that are already behind song_time_ms.
                     rom_addr <= rom_addr + 6'd1;
                 end
-            end
+            end // not restarting/changing chart
         end
     end
 endmodule

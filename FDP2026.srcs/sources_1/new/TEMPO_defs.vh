@@ -64,7 +64,7 @@ localparam integer SONG_END_PADDING_MS = 200;
 
 localparam integer TOTAL_NOTES           = 62;
 localparam integer START_TIME_MS         = 1000;
-localparam integer BEAT_INTERVAL_MS     = 400;
+localparam integer BEAT_INTERVAL_MS     = 800;
 localparam integer LAST_NOTE_BEAT_OFFSET = 62;
 localparam integer LAST_NOTE_TIME_MS    = START_TIME_MS +
                                            (LAST_NOTE_BEAT_OFFSET *
