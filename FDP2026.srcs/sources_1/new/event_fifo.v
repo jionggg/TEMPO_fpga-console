@@ -24,10 +24,14 @@ module event_fifo #(
     assign empty = count == 0;
     assign ready = (count < DEPTH) || take;
     assign head = mem[rd];
+    // Memory has no reset, allowing distributed RAM inference.
+    always @(posedge clk) begin
+        if (!reset && put) mem[wr] <= push_data;
+    end
     always @(posedge clk) begin
         if (reset) begin rd <= 0; wr <= 0; count <= 0; end
         else begin
-            if (put) begin mem[wr] <= push_data; wr <= wr + 1'b1; end
+            if (put) wr <= wr + 1'b1;
             if (take) rd <= rd + 1'b1;
             case ({put,take})
                 2'b10: count <= count + 1'b1;
@@ -37,3 +41,4 @@ module event_fifo #(
         end
     end
 endmodule
+

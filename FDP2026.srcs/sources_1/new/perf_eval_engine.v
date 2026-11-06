@@ -24,7 +24,7 @@ generates MISS results and duet decisions, serializes result outputs.
 module perf_eval_engine #(
     parameter integer PERFECT_MS=50,
     parameter integer GOOD_MS=150,
-    parameter integer REPORT_DELAY_MS=250,
+    parameter integer REPORT_DELAY_MS=300,
     parameter integer SYNC_MS=50
 )(
     input clk, input reset, input enable,
@@ -182,7 +182,8 @@ module perf_eval_engine #(
                     end
                     EXPIRE: begin
                         // Service buffered reports before expiring their instrument.
-                        // The 250 ms default is a reporting allowance, not a wider hit window.
+                        // The 300 ms default is a reporting allowance, not a wider hit window.
+
                         if(exp_seen_q && !resolved[expire_index] &&
                            (expire_index[6] ? (dr_empty && !drum_valid) : (pn_empty && !note_valid)) &&
                            evaluation_time_ms>exp_deadline_q) begin

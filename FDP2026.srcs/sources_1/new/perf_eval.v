@@ -20,7 +20,7 @@
 module perf_eval #(
     parameter integer PERFECT_MS=50,
     parameter integer GOOD_MS=150,
-    parameter integer REPORT_DELAY_MS=250,
+    parameter integer REPORT_DELAY_MS=300,
     parameter integer SYNC_MS=50,
     parameter integer CLKS_PER_MS=100_000,
     parameter integer RAW_AUDIO_INPUT=1
@@ -52,6 +52,7 @@ module perf_eval #(
     wire rewound=song_time_ms<previous_song_time;
     wire clear=rst || session_clear || game_state==MENU || rewound;
     wire enable=game_state==PLAY || game_state==RESULTS;
+    wire boundary_ok=!(game_state==PLAY && previous_state!=PLAY);
     wire [31:0] now_ms={14'd0,song_time_ms}+(game_state==RESULTS ? drain_ms : 32'd0);
 
     // v3: registered copies (1 clock later)
@@ -80,7 +81,7 @@ module perf_eval #(
     reg [31:0] r1_pn_age = 32'd0, r1_dr_age = 32'd0;
     reg [31:0] r1_pn_since = 32'd0, r1_dr_since = 32'd0;
     always @(posedge clk) begin
-        if (clear) begin
+        if (clear || !enable || !boundary_ok) begin
             r1_pn_valid <= 1'b0; r1_dr_valid <= 1'b0;
         end else begin
             r1_pn_valid <= note_valid;  r1_dr_valid <= drum_valid;
@@ -120,7 +121,7 @@ module perf_eval #(
     reg [2:0]  r2_pn_lane = 3'd0,  r2_dr_lane = 3'd0;
     reg [31:0] r2_pn_time = 32'd0, r2_dr_time = 32'd0;
     always @(posedge clk) begin
-        if (clear) begin
+        if (clear || !enable || !boundary_ok) begin
             r2_pn_valid <= 1'b0; r2_dr_valid <= 1'b0;
         end else begin
             r2_pn_valid <= r1_pn_valid; r2_dr_valid <= r1_dr_valid;
@@ -132,7 +133,6 @@ module perf_eval #(
 
     // ---------------- accept into the engine ----------------
     // Drop reports on the PLAY-entry edge; the new resume boundary is registered then.
-    wire boundary_ok=!(game_state==PLAY && previous_state!=PLAY);
     wire accept_pn=enable && boundary_ok && r2_pn_valid && r2_pn_ok &&
         (game_state!=RESULTS || r2_pn_time<={14'd0,song_time_ms});
     wire accept_dr=enable && boundary_ok && r2_dr_valid && r2_dr_ok &&
@@ -171,3 +171,4 @@ module perf_eval #(
         .sync_pulse(sync_pulse),.sync_ok(sync_ok),.sync_id(sync_id),
         .det_overflow(det_overflow),.pending(pending));
 endmodule
+
