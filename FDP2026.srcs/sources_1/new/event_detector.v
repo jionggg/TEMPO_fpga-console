@@ -1,4 +1,15 @@
-// event_detector.v | v4 | 04 Nov 2026 22:30 SGT
+// event_detector.v | v5 | 06 Nov 2026 11:00 SGT
+// v5: piano note accuracy (each change has its own on/off parameter; set all three to 0
+//     to get exactly the v4 behaviour back):
+//     RESTRICT_5   = 1: the note is chosen only among C4..G4, the 5 notes the game uses.
+//                       A4/B4/C5 were only ever wrong answers (a hard F4's 5th harmonic sits
+//                       next to A4's 4th harmonic bin, so a bright F could be reported as A).
+//     SOFT_OR      = 1: a note no longer NEEDS the hammer click (the 8 dB high-frequency jump).
+//                       It is also accepted when its harmonics jumped strongly (> 8x in 3
+//                       frames). Soft strikes have a weak click and were being missed.
+//                       Drums always make the click, so this should not add drum false notes.
+//     ABS_SHIFT    = 1: the minimum loudness NOTE_ABS is halved (shift right by 1), so softer
+//                       notes pass. 0 = v4 level. Raise back to 0 if false notes appear.
 // v4: timing fix only (results bit-identical to v3). The note jumps d1/d2 for all 8 notes are
 //     now computed in a new state S_DIF and registered, so S_ARG only does one 44-bit compare
 //     per clock (v3 did mux + compare + subtract + compare in one clock and failed timing
@@ -37,7 +48,10 @@ module event_detector #(
     parameter [43:0] NF_ABS      = 44'd98,
     parameter [43:0] NOTE_ABS    = 44'd292969,
     parameter [31:0] DRUM_OFFSET = 32'd311,
-    parameter [31:0] NOTE_OFFSET = 32'd253
+    parameter [31:0] NOTE_OFFSET = 32'd253,
+    parameter        RESTRICT_5  = 1,        // v5: choose the note among C4..G4 only
+    parameter        SOFT_OR     = 1,        // v5: click OR strong harmonic jump
+    parameter integer ABS_SHIFT  = 1         // v5: NOTE_ABS >> ABS_SHIFT
 )(
     input  wire         clk,
     input  wire         rst,
@@ -77,6 +91,10 @@ module event_detector #(
     reg        c_jump;
     // registered products
     reg [53:0] m_rise, m_ehf_l, m_ehf_r, m_odd, m_main;
+    reg [53:0] m_rise8;                  // v5: 8 x S_b(t-3), for the strong-jump test
+    reg        c_rise8;                  // v5: S_b(t) > 8 x S_b(t-3)
+    localparam [43:0] NOTE_ABS_EFF = NOTE_ABS >> ABS_SHIFT;
+    localparam [2:0]  LAST_IDX     = RESTRICT_5 ? 3'd4 : 3'd7;   // C4..G4 or C4..C5
     reg [53:0] m_trig, m_kick, m_snare, m_cok;
     reg [63:0] m_copk, m_col6;
     reg        c_rise, c_hf, c_abs, c_c4;
@@ -105,6 +123,7 @@ module event_detector #(
             note_code <= 4'd0; note_valid <= 1'b0; note_timestamp <= 32'd0;
             b1 <= 3'd0; b2 <= 3'd0; best1 <= 44'd0; best2 <= 44'd0;
             bestd1 <= 44'd0; bestd2 <= 44'd0; m_nf5 <= 54'd0; c_jump <= 1'b0;
+            m_rise8 <= 54'd0; c_rise8 <= 1'b0;
             m_rise <= 54'd0; m_ehf_l <= 54'd0; m_ehf_r <= 54'd0; m_odd <= 54'd0; m_main <= 54'd0;
             m_trig <= 54'd0; m_kick <= 54'd0; m_snare <= 54'd0; m_cok <= 54'd0;
             m_copk <= 64'd0; m_col6 <= 64'd0;
@@ -158,11 +177,12 @@ module event_detector #(
                     if (idx == 3'd0 || d1_idx > bestd1) begin bestd1 <= d1_idx; best1 <= s2_idx; b1 <= idx; end
                     if (idx == 3'd0 || d2_idx > bestd2) begin bestd2 <= d2_idx; best2 <= s0_idx; b2 <= idx; end
                     idx <= idx + 1'b1;
-                    if (idx == 3'd7) st <= S_NP;
+                    if (idx == LAST_IDX) st <= S_NP;
                 end
                 // ---- 3. note products ----
                 S_NP: begin
                     m_rise  <= {10'd0, S_h[5][b1]} * 54'd2;      // v3: x2 (was x4)
+                    m_rise8 <= {10'd0, S_h[5][b1]} * 54'd8;      // v5: strong harmonic jump
                     m_nf5   <= {10'd0, NF_h[5]}    * 54'd4;
                     m_ehf_l <= {10'd0, e_max}      * 54'd4;
                     m_ehf_r <= {10'd0, E_h[5]}     * 54'd25;
@@ -175,13 +195,16 @@ module event_detector #(
                     c_rise <= {10'd0, best1} > m_rise;
                     c_jump <= (bestd1 != 44'd0) && (bestd2 != 44'd0);
                     c_hf   <= (m_ehf_l > m_ehf_r) || ({10'd0, nf_max} > m_nf5);   // v3: or noise-floor click
-                    c_abs  <= best2 > NOTE_ABS;
+                    c_rise8 <= {10'd0, best1} > m_rise8;
+                    c_abs  <= best2 > NOTE_ABS_EFF;              // v5: was NOTE_ABS
                     c_c4   <= m_odd > m_main;
                     st <= S_ND;
                 end
                 // ---- 5. note decision (onset frame t = index 2) ----
                 S_ND: begin
-                    if (frames_seen >= 6'd6 && note_age >= 6'd10 && c_jump && c_rise && c_hf && c_abs) begin
+                    // v5: with SOFT_OR the click (c_hf) can be replaced by a strong harmonic jump
+                    if (frames_seen >= 6'd6 && note_age >= 6'd10 && c_jump && c_rise && c_abs &&
+                        (c_hf || (SOFT_OR && c_rise8))) begin
                         note_age       <= 6'd0;
                         SN_h[2]        <= best2;            // remembered for the drum check
                         note_code      <= ((b2 == 3'd7) && c_c4) ? 4'd1 : ({1'b0, b2} + 4'd1);
