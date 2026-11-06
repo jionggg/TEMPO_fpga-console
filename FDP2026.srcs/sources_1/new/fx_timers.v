@@ -8,6 +8,8 @@
 // pulse restarts the timer. The grade and lane are remembered while it is on.
 //
 // Three timers: piano judgement, drum judgement, and the sync flash.
+// Plus one small timer per lane (5 piano + 3 drum) for the hit sprites, started only
+// by a real hit (PERFECT or GOOD), so two quick hits in different lanes both show.
 //////////////////////////////////////////////////////////////////////////////////
 
 module fx_timers (
@@ -28,7 +30,9 @@ module fx_timers (
     output            drm_fx_on,        // drum judgement is showing
     output reg [1:0]  drm_fx_grade = 0,
     output reg [2:0]  drm_fx_lane  = 0,
-    output            sync_fx_on        // gold hit line is showing
+    output            sync_fx_on,       // gold hit line is showing
+    output     [4:0]  pno_spr_on,       // bit L = piano lane L's hit sprite is showing
+    output     [2:0]  drm_spr_on        // bit L = drum lane L's hit sprite is showing
     );
 
     `include "TEMPO_layout.vh"     // FX_MS
@@ -70,5 +74,47 @@ module fx_timers (
     assign pno_fx_on  = (pno_left  != 0);
     assign drm_fx_on  = (drm_left  != 0);
     assign sync_fx_on = (sync_left != 0);
+
+    // ---- hit sprites: one stairwell light per lane ----
+    `include "TEMPO_defs.vh"       // GRADE_MISS
+    wire hit   = judge_pulse && (judge_grade != GRADE_MISS);   // a real hit
+    wire p_hit = hit && (judge_player == 1'b0);
+    wire d_hit = hit && (judge_player == 1'b1);
+
+    lane_timer p0 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(p_hit && judge_lane == 3'd0), .on(pno_spr_on[0]));
+    lane_timer p1 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(p_hit && judge_lane == 3'd1), .on(pno_spr_on[1]));
+    lane_timer p2 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(p_hit && judge_lane == 3'd2), .on(pno_spr_on[2]));
+    lane_timer p3 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(p_hit && judge_lane == 3'd3), .on(pno_spr_on[3]));
+    lane_timer p4 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(p_hit && judge_lane == 3'd4), .on(pno_spr_on[4]));
+    lane_timer d0 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(d_hit && judge_lane == 3'd0), .on(drm_spr_on[0]));
+    lane_timer d1 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(d_hit && judge_lane == 3'd1), .on(drm_spr_on[1]));
+    lane_timer d2 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(d_hit && judge_lane == 3'd2), .on(drm_spr_on[2]));
+
+endmodule
+
+
+//////////////////////////////////////////////////////////////////////////////////
+// lane_timer - one stairwell light: on for FX_MS after `start`, restarted by a new start
+//////////////////////////////////////////////////////////////////////////////////
+
+module lane_timer (
+    input  clk,
+    input  rst,
+    input  ms_tick,
+    input  start,
+    output on
+    );
+
+    `include "TEMPO_layout.vh"     // FX_MS
+
+    reg [7:0] left = 0;            // ms left (250 fits in 8 bits)
+
+    always @(posedge clk) begin
+        if (rst)                         left <= 0;
+        else if (start)                  left <= FX_MS;
+        else if (ms_tick && left != 0)   left <= left - 1;
+    end
+
+    assign on = (left != 0);
 
 endmodule

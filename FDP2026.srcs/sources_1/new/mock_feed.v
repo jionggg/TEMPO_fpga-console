@@ -200,6 +200,8 @@ module mock_judge (
     output reg         judge_player = 0,
     output reg [1:0]   judge_grade  = 0,
     output reg [2:0]   judge_lane   = 0,
+    output reg [17:0]  judge_target_ms = 0,   // when the judged beat was due
+    output reg [17:0]  judge_hit_ms    = 0,   // when it was "hit" (0 = not hit)
     output reg         sync_pulse   = 0,
     output reg         sync_ok      = 0,
     // like Meiyi's outputs
@@ -242,6 +244,14 @@ module mock_judge (
     wire [15:0] drm_points = (drm_grade == GRADE_PERFECT) ? 100 * mult :
                              (drm_grade == GRADE_GOOD)    ?  50 * mult : 0;
 
+    // pretend timing errors for the hit colour (offset by +200 so nothing goes negative):
+    //   PERFECT: 16 ms early or 24 ms late;  GOOD: 90 ms early or 100 ms late
+    wire [17:0] beat_ms = beat * 512;
+    wire [17:0] pno_off = (pno_grade == GRADE_PERFECT) ? (beat[0] ? 18'd224 : 18'd184) :
+                                                         (beat[0] ? 18'd300 : 18'd110);
+    wire [17:0] drm_off = (drm_grade == GRADE_PERFECT) ? (beat[0] ? 18'd184 : 18'd224) :
+                                                         (beat[0] ? 18'd110 : 18'd300);
+
     // ---- 2. Judge each new beat in 3 steps, one clock each ----
     // The judge bus carries one judgement per clock, so piano, drum and the sync
     // pair go out on 3 different clocks, the way Pei Ling's module will send them.
@@ -274,6 +284,8 @@ module mock_judge (
                               judge_player <= 0;
                               judge_grade  <= pno_grade;
                               judge_lane   <= pno_lane;
+                              judge_target_ms <= beat_ms;
+                              judge_hit_ms    <= (pno_grade == GRADE_MISS) ? 18'd0 : beat_ms + pno_off - 18'd200;
                               pno_score    <= pno_score + pno_points;
                           end
                           step <= 2'd2;
@@ -284,6 +296,8 @@ module mock_judge (
                               judge_player <= 1;
                               judge_grade  <= drm_grade;
                               judge_lane   <= drm_lane;
+                              judge_target_ms <= beat_ms;
+                              judge_hit_ms    <= (drm_grade == GRADE_MISS) ? 18'd0 : beat_ms + drm_off - 18'd200;
                               drm_score    <= drm_score + drm_points;
                           end
                           step <= 2'd3;

@@ -1,4 +1,7 @@
-// perf_eval_engine.v | v2 | 04 Nov 2026 22:45 SGT
+// perf_eval_engine.v | v3 | 06 Nov 2026 SGT
+// v3 (added by D, Ji Yong, for B to review; judging behaviour unchanged):
+//   judge_target_ms / judge_hit_ms come out with each judge_pulse (from targets[] and
+//   hit_times[] of the event being reported). hit_times is 0 for an expired MISS.
 // v2 (timing fix by A for B to review; judging behaviour unchanged):
 //   - SCAN is pipelined over 3 clocks: P1 reads the candidate's target/lane/flags into
 //     registers, P2 computes the distance, P3 compares with the best so far. Two WAIT
@@ -36,6 +39,7 @@ module perf_eval_engine #(
     output reg judge_pulse, output reg judge_player,
     output reg [2:0] judge_lane, output reg [1:0] judge_grade,
     output reg [7:0] judge_id,
+    output reg [17:0] judge_target_ms, output reg [17:0] judge_hit_ms,
     output reg sync_pulse, output reg sync_ok, output reg [7:0] sync_id,
     output reg det_overflow, output pending
 );
@@ -94,6 +98,7 @@ module perf_eval_engine #(
             prefer_drum<=0; active_drum<=0; active_lane<=0; active_time<=0;
             scan<=0; best_index<=0; best_found<=0; best_distance<=0;
             judge_player<=0; judge_lane<=0; judge_grade<=MISS; judge_id<=0;
+            judge_target_ms<=0; judge_hit_ms<=0;
             sync_ok<=0; sync_id<=0; det_overflow<=0;
             p1_valid<=0; p1_ok<=0; p1_index<=0; p1_time<=0;
             p2_valid<=0; p2_ok<=0; p2_index<=0; p2_dist<=0;
@@ -124,6 +129,8 @@ module perf_eval_engine #(
                     judge_pulse<=1; judge_player<=out_index[6];
                     judge_lane<=lanes[out_index]; judge_grade<=grades[out_index];
                     judge_id<={2'b00,out_index[5:0]};
+                    judge_target_ms<=targets[out_index];
+                    judge_hit_ms<=hit_times[out_index][17:0];
                     if(out_index[6]) drm_judged_id<=out_index[5:0];
                     else pno_judged_id<=out_index[5:0];
                     if(seen[other] && emitted[other] &&

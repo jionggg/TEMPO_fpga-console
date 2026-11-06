@@ -117,6 +117,8 @@ module My_Top_Module (
     wire [1:0]  judge_grade;          // 0 MISS, 1 GOOD, 2 PERFECT
     wire [2:0]  judge_lane;           // piano 0..4; drum 0, 1, 2 (crash, snare, bass)
     wire [7:0]  judge_id;
+    wire [17:0] judge_target_ms;      // B -> D: when the judged note was due (song ms)
+    wire [17:0] judge_hit_ms;         // B -> D: when it was actually hit, 0 = not hit
     wire        sync_pulse, sync_ok;
     wire [7:0]  sync_id;
     wire        det_overflow;         // sticky: B's hit queue overflowed (debug)
@@ -152,6 +154,7 @@ module My_Top_Module (
         .pno_judged_id(pno_judged_id), .drm_judged_id(drm_judged_id),
         .judge_pulse(judge_pulse), .judge_player(judge_player),
         .judge_lane(judge_lane), .judge_grade(judge_grade), .judge_id(judge_id),
+        .judge_target_ms(judge_target_ms), .judge_hit_ms(judge_hit_ms),
         .sync_pulse(sync_pulse), .sync_ok(sync_ok), .sync_id(sync_id),
         .det_overflow(det_overflow), .pending(eval_pending)
     );
@@ -189,6 +192,7 @@ module My_Top_Module (
         .drm_ev_lane(drm_ev_lane), .drm_ev_sync(drm_ev_sync),
         .judge_pulse(judge_pulse), .judge_player(judge_player),
         .judge_grade(judge_grade), .judge_lane(judge_lane),
+        .judge_target_ms(judge_target_ms), .judge_hit_ms(judge_hit_ms),
         .sync_pulse(sync_pulse), .sync_ok(sync_ok),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),

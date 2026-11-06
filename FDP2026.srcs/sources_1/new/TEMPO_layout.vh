@@ -1,4 +1,6 @@
-// TEMPO_layout.vh | v3 | 05 Nov 2026 SGT
+// TEMPO_layout.vh | v4 | 06 Nov 2026 SGT
+// v4 (Ji Yong): scene screens (menu, countdown, pause, results), hit sprites under the
+//     white line, dragging hit colour; letters A L N Q U; dark grade shades.
 // v3 (Ji Yong): merged feat/ui-renderer: ribbon geometry, judgement colours, font codes.
 // v2: LOOKAHEAD_MS renamed TILE_LOOKAHEAD_MS. TEMPO_defs.vh already has a LOOKAHEAD_MS
 //     (Meiyi's 1500 ms spawn time); screen_layout includes both files, so the same
@@ -31,7 +33,11 @@ localparam [6:0] MINE_X  = 7'd66;    // my score, 5 digits: x = 66..94
 localparam [6:0] MULT_X  = 7'd43;    // "x3": x = 43..53, centred on the screen
 localparam [5:0] WORD_Y  = 6'd28;    // judgement word rows 28..34, in the middle of the field
 localparam BUFF_MS = 3000;    // a full buff lasts 3 s: the fuse is full width at 3000 ms left
-localparam FX_MS   = 250;     // judgement word, pad glow and gold hit line last 250 ms
+localparam FX_MS   = 250;     // judgement word, hit sprite and gold hit line last 250 ms
+
+// Under the white line (rows 56..63): hit sprites and the dragging hit colour
+localparam SPRITE_Y0 = 56;    // sprites are 16 x 8: rows 56..63
+localparam MARK_MS   = 520;   // a hit's colour is kept until it has scrolled off the bottom
 
 // Colours (RGB565)
 localparam [15:0] BLACK   = 16'h0000,
@@ -46,7 +52,10 @@ localparam [15:0] BLACK   = 16'h0000,
                   GREEN   = 16'h07E0,   // PERFECT, and the buff (xN + fuse)
                   YELLOW  = 16'hFFE0,   // GOOD
                   RED     = 16'hF800,   // MISS
-                  GOLD    = 16'hFEA0;   // hit line flash on a good sync
+                  GOLD    = 16'hFEA0,   // hit line flash on a good sync
+                  DK_GREEN  = 16'h03E0, // half-bright shades: the part of a hit that
+                  DK_YELLOW = 16'h7BE0, //   lies outside its target tile (early / late)
+                  DK_RED    = 16'h7800;
 
 // Font character codes (font_rom). Digits 0..9 use their own value as the code,
 // so a decimal digit d can be drawn with code {1'b0, d}.
@@ -63,4 +72,9 @@ localparam [4:0] CH_X  = 5'd10,   // small "x" for the multiplier
                  CH_D  = 5'd20,
                  CH_M  = 5'd21,
                  CH_I  = 5'd22,
-                 CH_S  = 5'd23;
+                 CH_S  = 5'd23,
+                 CH_A  = 5'd24,
+                 CH_L  = 5'd25,
+                 CH_N  = 5'd26,
+                 CH_Q  = 5'd27,
+                 CH_U  = 5'd28;
