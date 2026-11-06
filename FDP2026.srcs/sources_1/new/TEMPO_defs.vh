@@ -18,6 +18,11 @@ localparam [2:0] ST_MENU      = 3'd0,
                  ST_PAUSED    = 3'd3,
                  ST_RESULTS   = 3'd4;
 
+// song_select [1:0]                  
+localparam [1:0] SONG_1 = 2'd0,
+                 SONG_2 = 2'd1,
+                 SONG_3 = 2'd2;
+                 
 // judge_grade [1:0] - written only by Pei Ling's perf_eval
 localparam [1:0] GRADE_MISS    = 2'd0,
                  GRADE_GOOD    = 2'd1,
