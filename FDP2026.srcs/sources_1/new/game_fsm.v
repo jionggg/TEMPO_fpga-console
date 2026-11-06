@@ -18,7 +18,6 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-
 // ============================================================================
 // TEMPO game_fsm wrapper
 //
@@ -39,6 +38,7 @@
 //   btn_debounce x3  btnC / btnU / btnD -> clean one-clock press pulses
 //   countdown_timer  3, 2, 1, GO  (num goes to the OLED; done -> PLAYING)
 //   ms_timer         the song timer, song_time_ms
+//   song_select      independent 0..2 menu selection; up/down navigate in MENU
 //   Block 1          the ONLY place game_state changes (state transitions)
 //   Block 2          decides what every output does in each state
 //
@@ -63,6 +63,7 @@ module game_fsm #(
     input  wire [17:0] song_len_ms,        // from pattern_gen
 
     output reg  [2:0]  game_state,
+    output reg  [1:0]  song_select,        // 0=existing chart, 1/2=placeholder charts
     output wire [17:0] song_time_ms,
     output wire [1:0]  countdown_num,
     output wire        countdown_go,
@@ -115,16 +116,18 @@ module game_fsm #(
     // Block 1: state transitions (the only writer of game_state)
     // ------------------------------------------------------------------------
     always @(posedge clk or posedge rst) begin
-        if (rst)
+        if (rst) begin
             game_state <= ST_MENU;
-        else begin
+        end else begin
             case (game_state)
                 ST_MENU:      if (c_press)      game_state <= ST_COUNTDOWN;
 
                 ST_COUNTDOWN: if (cd_done)      game_state <= ST_PLAYING;
 
-                ST_PLAYING:   if (song_end)     game_state <= ST_RESULTS;
-                              else if (u_press) game_state <= ST_PAUSED;
+                ST_PLAYING: begin
+                    if (song_end)      game_state <= ST_RESULTS;
+                    else if (u_press) game_state <= ST_PAUSED;
+                end
 
                 ST_PAUSED:    if (u_press)      game_state <= ST_PLAYING;  // resume wins
                               else if (d_press) game_state <= ST_MENU;     // if both pressed
@@ -133,6 +136,20 @@ module game_fsm #(
 
                 default:                        game_state <= ST_MENU;
             endcase
+        end
+    end
+
+    // Song selection is separate from game_state. Up/down navigate the three
+    // menu choices; selecting an option does not create a new game state.
+    // btnC has priority if it is pressed in the same cycle as up/down.
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            song_select <= 2'd0;
+        else if (game_state == ST_MENU && !c_press) begin
+            if (u_press && !d_press)
+                song_select <= (song_select == 2'd0) ? 2'd2 : song_select - 2'd1;
+            else if (d_press && !u_press)
+                song_select <= (song_select == 2'd2) ? 2'd0 : song_select + 2'd1;
         end
     end
 
