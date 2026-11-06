@@ -58,7 +58,7 @@ module tb_display_top;
     reg  [7:0]      drm_ev_sync   = 8'b0000_0001;
     reg  [15:0]     pno_score = 16'd1200, drm_score = 16'd900;
     reg  [7:0]      pno_combo = 8'd12,    drm_combo = 8'd7;
-    reg  [1:0]      difficulty = 2'd1;
+    reg  [1:0]      song_select = 2'd1;
 
     // ---- mock inputs (Pei Ling) ----
     reg             judge_pulse = 0, judge_player = 0, sync_pulse = 0, sync_ok = 0;
@@ -79,11 +79,11 @@ module tb_display_top;
         .drm_ev_lane(drm_ev_lane), .drm_ev_sync(drm_ev_sync),
         .judge_pulse(judge_pulse), .judge_player(judge_player),
         .judge_grade(judge_grade), .judge_lane(judge_lane),
-        .judge_target_ms(18'd0), .judge_hit_ms(18'd0),
-        .sync_pulse(sync_pulse), .sync_ok(sync_ok),
+        .judge_target_ms(18'd0), .judge_hit_ms(18'd0), .judge_id(8'd0),
+        .sync_pulse(sync_pulse), .sync_ok(sync_ok), .sync_id(8'd0),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
-        .difficulty(difficulty), .mult(4'd3), .buff_ms_left(12'd1500),   // x3, half a buff left
+        .song_select(song_select), .mult(4'd3), .buff_ms_left(12'd1500),   // x3, half a buff left
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
     );

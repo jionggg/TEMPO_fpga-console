@@ -16,6 +16,9 @@
 //               scene_text.v, sprite_rom.v, hit_log.v
 //
 // Revision:
+// Revision 0.04 - song menu (song_select), lane labels under the white line, bass sprite
+//                 for every drum lane, 3 px progress bar, SYNC'D line + results count,
+//                 drummer score left / pianist right on both screens with a green flash
 // Revision 0.03 - scene per game state (menu, countdown, pause, results), hit sprites
 //                 and dragging hit colour under the white line (replaces pad glow)
 // Revision 0.02 - ribbon (scores, buff), judgement words, pad glow, sync flash
@@ -25,13 +28,13 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 // One scene per game state (Meiyi's game_state):
-//   MENU       TEMPO title, PIANO / DRUMS, PRESS START (blinking)
+//   MENU       TEMPO title, PIANO / DRUMS, EASY / NORMAL / HARD (song_select), PRESS START
 //   COUNTDOWN  empty field + ribbon, big outlined 3, 2, 1, GO; no tiles yet
-//   PLAYING    top layer first: ribbon, judgement word, hit sprite (under the white
-//              line), hit colour (under the line), falling tiles, hit line (gold after
-//              a good sync), pads, lane dividers, black
+//   PLAYING    top layer first: ribbon, judgement word and SYNC'D, hit sprite (under the
+//              white line), hit colour (under the line), falling tiles, hit line (gold
+//              after a good sync), lane labels, pads, lane dividers, black
 //   PAUSED     the PLAYING picture at half brightness, PAUSED / U RESUME / D QUIT on top
-//   RESULTS    ribbon (final scores) + RESULTS, my PERFECT / GOOD / MISS counts, PRESS C
+//   RESULTS    ribbon (final scores) + RESULTS, SYNC'D nn/tt, my PERFECT / GOOD / MISS, PRESS C
 // sw[0] up = test mode: the mocks stand in for Meiyi and Pei Ling and the PLAYING
 // scene is always shown.
 //
@@ -61,7 +64,7 @@ module display_top (
     input  [15:0]      drm_score,
     input  [7:0]       pno_combo,
     input  [7:0]       drm_combo,
-    input  [1:0]       difficulty,
+    input  [1:0]       song_select,     // menu choice 0..2 (EASY, NORMAL, HARD)
     input  [3:0]       mult,            // proposed: team multiplier, 1 = no buff, max 9
     input  [11:0]      buff_ms_left,    // proposed: ms left on the buff, 0..3000
     // from Pei Ling
@@ -71,8 +74,10 @@ module display_top (
     input  [2:0]       judge_lane,
     input  [17:0]      judge_target_ms, // when the judged note was due
     input  [17:0]      judge_hit_ms,    // when it was actually hit (0 = not hit)
+    input  [7:0]       judge_id,        // which event was judged (a duet's two halves share it)
     input              sync_pulse,
     input              sync_ok,
+    input  [7:0]       sync_id,         // which duet the sync result is for
     // OLED drivers
     input  [12:0]      pno_index,
     output [15:0]      pno_colour,
@@ -100,6 +105,7 @@ module display_top (
     );
 
     wire         mock_judge_pulse, mock_judge_player, mock_sync_pulse, mock_sync_ok;
+    wire [7:0]   mock_judge_id, mock_sync_id;
     wire [1:0]   mock_judge_grade;
     wire [2:0]   mock_judge_lane;
     wire [17:0]  mock_judge_target, mock_judge_hit;
@@ -113,6 +119,7 @@ module display_top (
         .judge_pulse(mock_judge_pulse), .judge_player(mock_judge_player),
         .judge_grade(mock_judge_grade), .judge_lane(mock_judge_lane),
         .judge_target_ms(mock_judge_target), .judge_hit_ms(mock_judge_hit),
+        .judge_id(mock_judge_id),       .sync_id(mock_sync_id),
         .sync_pulse(mock_sync_pulse),   .sync_ok(mock_sync_ok),
         .pno_score(mock_pno_score),     .drm_score(mock_drm_score),
         .mult(mock_mult),               .buff_ms_left(mock_buff_ms_left)
@@ -142,8 +149,10 @@ module display_top (
     wire [2:0]   use_judge_lane   = sw_mock ? mock_judge_lane   : judge_lane;
     wire [17:0]  use_judge_target = sw_mock ? mock_judge_target : judge_target_ms;
     wire [17:0]  use_judge_hit    = sw_mock ? mock_judge_hit    : judge_hit_ms;
+    wire [7:0]   use_judge_id     = sw_mock ? mock_judge_id     : judge_id;
     wire         use_sync_pulse   = sw_mock ? mock_sync_pulse   : sync_pulse;
     wire         use_sync_ok      = sw_mock ? mock_sync_ok      : sync_ok;
+    wire [7:0]   use_sync_id      = sw_mock ? mock_sync_id      : sync_id;
 
     // a new game is starting (or no game): forget the last game's tallies and hits
     wire new_round = rst || (use_state == ST_MENU) || (use_state == ST_COUNTDOWN);
@@ -155,8 +164,38 @@ module display_top (
     bin2bcd drm_bcd (.clk(clk), .value(use_drm_score), .digits(drm_digits));
 
 
+    // ---- Was a good sync PERFECT + PERFECT? (green SYNC'D) or not (orange) ----
+    // Pei Ling sends the sync result on the same clock as the duet's second judgement,
+    // so remember every judgement's grade by its ID, like a coat check: the first
+    // player's grade waits on its peg until the partner's result arrives.
+    reg [1:0] pno_grade_of [0:63];
+    reg [1:0] drm_grade_of [0:63];
+    always @(posedge clk) begin
+        if (use_judge_pulse) begin
+            if (use_judge_player == 1'b0) pno_grade_of[use_judge_id[5:0]] <= use_judge_grade;
+            else                          drm_grade_of[use_judge_id[5:0]] <= use_judge_grade;
+        end
+    end
+    // a grade arriving on this very clock has not reached its peg yet: take it directly
+    wire [1:0] sync_pno_grade = (use_judge_pulse && use_judge_player == 1'b0) ? use_judge_grade
+                                                                         : pno_grade_of[use_sync_id[5:0]];
+    wire [1:0] sync_drm_grade = (use_judge_pulse && use_judge_player == 1'b1) ? use_judge_grade
+                                                                         : drm_grade_of[use_sync_id[5:0]];
+    wire sync_perfect = (sync_pno_grade == GRADE_PERFECT) && (sync_drm_grade == GRADE_PERFECT);
+
+    // ---- A score just went up? (it only drops when a new game clears it) ----
+    reg  [15:0] last_pno_score = 0, last_drm_score = 0;
+    always @(posedge clk) begin
+        last_pno_score <= use_pno_score;
+        last_drm_score <= use_drm_score;
+    end
+    wire pno_up = (use_pno_score > last_pno_score);
+    wire drm_up = (use_drm_score > last_drm_score);
+
+
     // ---- Stretch the 1-clock judgement pulses into 250 ms flashes ----
-    wire       pno_fx_on, drm_fx_on, sync_fx_on;
+    wire       pno_fx_on, drm_fx_on, sync_fx_on, sync_fx_perfect;
+    wire       pno_flash, drm_flash;
     wire [1:0] pno_fx_grade, drm_fx_grade;
     wire [2:0] pno_fx_lane,  drm_fx_lane;
     wire [4:0] pno_spr_on;
@@ -166,11 +205,13 @@ module display_top (
         .clk(clk), .rst(rst), .ms_tick(ms_tick),
         .judge_pulse(use_judge_pulse), .judge_player(use_judge_player),
         .judge_grade(use_judge_grade), .judge_lane(use_judge_lane),
-        .sync_pulse(use_sync_pulse),   .sync_ok(use_sync_ok),
+        .sync_pulse(use_sync_pulse),   .sync_ok(use_sync_ok), .sync_perfect(sync_perfect),
+        .pno_up(pno_up), .drm_up(drm_up),
         .pno_fx_on(pno_fx_on), .pno_fx_grade(pno_fx_grade), .pno_fx_lane(pno_fx_lane),
         .drm_fx_on(drm_fx_on), .drm_fx_grade(drm_fx_grade), .drm_fx_lane(drm_fx_lane),
-        .sync_fx_on(sync_fx_on),
-        .pno_spr_on(pno_spr_on), .drm_spr_on(drm_spr_on)
+        .sync_fx_on(sync_fx_on), .sync_fx_perfect(sync_fx_perfect),
+        .pno_spr_on(pno_spr_on), .drm_spr_on(drm_spr_on),
+        .pno_flash(pno_flash), .drm_flash(drm_flash)
     );
 
 
@@ -185,10 +226,24 @@ module display_top (
     end
 
 
-    // ---- Results: count each player's PERFECT / GOOD / MISS during the song ----
+    // ---- Results: count each player's PERFECT / GOOD / MISS, and the team's SYNC'Ds ----
     // Cleared when a new game starts; held through RESULTS. Stops at 99 (2 digits).
     reg [7:0] p_perf = 0, p_good = 0, p_miss = 0;
     reg [7:0] d_perf = 0, d_good = 0, d_miss = 0;
+    // syncs = duets played in sync; duets = every duet Pei Ling judged, in sync or not.
+    // She judges every duet of the song (a missed one too, once its time runs out), so
+    // by the RESULTS screen duets = the number of duets (sync tiles) in the song.
+    reg [7:0] syncs  = 0;
+    reg [7:0] duets  = 0;
+    always @(posedge clk) begin
+        if (new_round) begin
+            syncs <= 0;
+            duets <= 0;
+        end else if (use_sync_pulse) begin
+            if (use_sync_ok && syncs != 99) syncs <= syncs + 1;
+            if (duets != 99)                duets <= duets + 1;
+        end
+    end
     always @(posedge clk) begin
         if (new_round) begin
             p_perf <= 0; p_good <= 0; p_miss <= 0;
@@ -214,6 +269,9 @@ module display_top (
     bin2bcd bcd_dp (.clk(clk), .value({8'd0, d_perf}), .digits(d_perf_d));
     bin2bcd bcd_dg (.clk(clk), .value({8'd0, d_good}), .digits(d_good_d));
     bin2bcd bcd_dm (.clk(clk), .value({8'd0, d_miss}), .digits(d_miss_d));
+    wire [19:0] sync_d, duets_d;
+    bin2bcd bcd_sy (.clk(clk), .value({8'd0, syncs}),  .digits(sync_d));
+    bin2bcd bcd_du (.clk(clk), .value({8'd0, duets}),  .digits(duets_d));
 
 
     // ---- Recent hits per player, for the dragging colour under the white line ----
@@ -245,34 +303,42 @@ module display_top (
     wire [12:0] pno_idx = ROTATE_PNO ? 13'd6143 - pno_index : pno_index;
     wire [12:0] drm_idx = ROTATE_DRM ? 13'd6143 - drm_index : drm_index;
 
-    // piano screen: "my" score is the piano's, the teammate is the drummer
+    // piano screen (both screens show the drummer's score left, the pianist's right)
     screen_layout #(.SCREEN(0)) piano_screen (
         .pixel_index(pno_idx), .state(use_state), .countdown_num(countdown_num), .blink(blink),
+        .song_select(song_select),
         .song_time_ms(use_song_time), .song_len_ms(use_song_len),
         .ev_valid(use_pno_valid), .ev_time(use_pno_time),
         .ev_lane(use_pno_lane),   .ev_sync(use_pno_sync),
-        .my_digits(pno_digits),   .mate_digits(drm_digits),
+        .drm_digits(drm_digits),  .pno_digits(pno_digits),
+        .drm_flash(drm_flash),    .pno_flash(pno_flash),
         .mult(use_mult),          .buff_ms_left(use_buff),
-        .fx_on(pno_fx_on), .fx_grade(pno_fx_grade), .sync_fx_on(sync_fx_on),
+        .fx_on(pno_fx_on), .fx_grade(pno_fx_grade),
+        .sync_fx_on(sync_fx_on), .sync_fx_perfect(sync_fx_perfect),
         .spr_on(pno_spr_on),
         .rec_valid(p_rec_valid), .rec_lane(p_rec_lane), .rec_target(p_rec_target),
         .rec_hit(p_rec_hit), .rec_grade(p_rec_grade),
         .perfect_d(p_perf_d[7:0]), .good_d(p_good_d[7:0]), .miss_d(p_miss_d[7:0]),
+        .sync_d(sync_d[7:0]), .sync_total_d(duets_d[7:0]),
         .colour(pno_colour)
     );
-    // drum screen: the other way round
+    // drum screen: its own judgements, hits and tallies
     screen_layout #(.SCREEN(1)) drum_screen (
         .pixel_index(drm_idx), .state(use_state), .countdown_num(countdown_num), .blink(blink),
+        .song_select(song_select),
         .song_time_ms(use_song_time), .song_len_ms(use_song_len),
         .ev_valid(use_drm_valid), .ev_time(use_drm_time),
         .ev_lane(use_drm_lane),   .ev_sync(use_drm_sync),
-        .my_digits(drm_digits),   .mate_digits(pno_digits),
+        .drm_digits(drm_digits),  .pno_digits(pno_digits),
+        .drm_flash(drm_flash),    .pno_flash(pno_flash),
         .mult(use_mult),          .buff_ms_left(use_buff),
-        .fx_on(drm_fx_on), .fx_grade(drm_fx_grade), .sync_fx_on(sync_fx_on),
+        .fx_on(drm_fx_on), .fx_grade(drm_fx_grade),
+        .sync_fx_on(sync_fx_on), .sync_fx_perfect(sync_fx_perfect),
         .spr_on({2'b00, drm_spr_on}),
         .rec_valid(d_rec_valid), .rec_lane(d_rec_lane), .rec_target(d_rec_target),
         .rec_hit(d_rec_hit), .rec_grade(d_rec_grade),
         .perfect_d(d_perf_d[7:0]), .good_d(d_good_d[7:0]), .miss_d(d_miss_d[7:0]),
+        .sync_d(sync_d[7:0]), .sync_total_d(duets_d[7:0]),
         .colour(drm_colour)
     );
 
@@ -285,19 +351,23 @@ module screen_layout #(parameter SCREEN = 0) (
     input      [2:0]      state,          // which scene (game_state)
     input      [1:0]      countdown_num,
     input                 blink,
+    input      [1:0]      song_select,    // menu choice 0..2
     input      [17:0]     song_time_ms,
     input      [17:0]     song_len_ms,
     input      [7:0]      ev_valid,
     input      [8*18-1:0] ev_time,
     input      [8*3-1:0]  ev_lane,
     input      [7:0]      ev_sync,
-    input      [19:0]     my_digits,      // this screen's player's score, 5 digits
-    input      [19:0]     mate_digits,    // the other player's score
+    input      [19:0]     drm_digits,     // drummer's score, 5 digits (ribbon, left)
+    input      [19:0]     pno_digits,     // pianist's score (ribbon, right)
+    input                 drm_flash,      // drummer's score just went up
+    input                 pno_flash,      // pianist's score just went up
     input      [3:0]      mult,
     input      [11:0]     buff_ms_left,
     input                 fx_on,          // this player's judgement word is showing
     input      [1:0]      fx_grade,
-    input                 sync_fx_on,     // gold hit line
+    input                 sync_fx_on,     // gold hit line and SYNC'D are showing
+    input                 sync_fx_perfect,// ... and the duet was PERFECT + PERFECT
     input      [4:0]      spr_on,         // bit L = lane L's hit sprite is showing
     input      [3:0]      rec_valid,      // this player's 4 recent hits (hit_log)
     input      [11:0]     rec_lane,
@@ -307,6 +377,8 @@ module screen_layout #(parameter SCREEN = 0) (
     input      [7:0]      perfect_d,      // results: 2 decimal digits each
     input      [7:0]      good_d,
     input      [7:0]      miss_d,
+    input      [7:0]      sync_d,         // results: the team's SYNC'D count
+    input      [7:0]      sync_total_d,   // results: how many duets the song had
     output reg [15:0]     colour
     );
 
@@ -332,7 +404,8 @@ module screen_layout #(parameter SCREEN = 0) (
             else if (x >= 58 && x <= 74) begin in_lane = 1'b1; lane = NOTE_F; end
             else if (x >= 77 && x <= 93) begin in_lane = 1'b1; lane = NOTE_G; end
         end else begin
-            // 3 drum lanes, 32 px each: crash | snare | bass
+            // 3 drum lanes, 32 px each: hi-hat | snare | bass
+            // (lane 0 is DRUM_CRASH in TEMPO_defs.vh; on screen it is the hi-hat)
             if      (x >=  2 && x <= 29) begin in_lane = 1'b1; lane = DRUM_CRASH; end
             else if (x >= 34 && x <= 61) begin in_lane = 1'b1; lane = DRUM_SNARE; end
             else if (x >= 66 && x <= 93) begin in_lane = 1'b1; lane = DRUM_BASS;  end
@@ -360,9 +433,11 @@ module screen_layout #(parameter SCREEN = 0) (
     wire        word_on;
     ui_renderer #(.SCREEN(SCREEN)) ui (
         .x(x), .y(y), .song_time_ms(song_time_ms), .song_len_ms(song_len_ms),
-        .my_digits(my_digits), .mate_digits(mate_digits),
+        .drm_digits(drm_digits), .pno_digits(pno_digits),
+        .drm_flash(drm_flash),   .pno_flash(pno_flash),
         .mult(mult), .buff_ms_left(buff_ms_left),
         .fx_on(fx_on), .fx_grade(fx_grade),
+        .sync_on(sync_fx_on), .sync_perfect(sync_fx_perfect),
         .ribbon_colour(ribbon_colour), .word_on(word_on),
         .word_colour(word_colour), .fx_colour(fx_colour)
     );
@@ -373,6 +448,7 @@ module screen_layout #(parameter SCREEN = 0) (
     scene_text #(.SCREEN(SCREEN)) words (
         .x(x), .y(y), .state(state), .countdown_num(countdown_num), .blink(blink),
         .perfect_d(perfect_d), .good_d(good_d), .miss_d(miss_d),
+        .sync_d(sync_d), .sync_total_d(sync_total_d), .song_select(song_select),
         .text_on(text_on), .text_colour(text_colour),
         .big_on(big_on), .big_colour(big_colour)
     );
@@ -396,9 +472,9 @@ module screen_layout #(parameter SCREEN = 0) (
     wire [15:0] mark_colour = m0 ? c0 : m1 ? c1 : m2 ? c2 : c3;
 
     // ---- under the white line: the hit sprite of a lane that was just hit ----
-    // piano: an eighth note in every lane; drums: hi-hat (lane 0), snare (1), kick (2)
-    wire [1:0]  spr_id  = (SCREEN == 0) ? 2'd0 :
-                          (lane == 3'd0) ? 2'd1 : (lane == 3'd1) ? 2'd2 : 2'd3;
+    // piano: an eighth note in every lane; drums: the bass drum in every lane
+    // (the lane label underneath says which drum it was)
+    wire [1:0]  spr_id  = (SCREEN == 0) ? 2'd0 : 2'd3;     // SPR_NOTE or SPR_KICK
     wire [6:0]  spr_x0  = (SCREEN == 0) ? lane * 19 + 1 : lane * 32 + 8;  // sprite's left column
     wire [6:0]  spr_col = x - spr_x0;                                     // 0..15 inside it
     wire [5:0]  spr_row = y - SPRITE_Y0;                                  // 0..7 inside it
@@ -406,6 +482,10 @@ module screen_layout #(parameter SCREEN = 0) (
     sprite_rom sprites (.sprite(spr_id), .row(spr_row[2:0]), .bits(spr_bits));
     wire spr_px = in_lane && spr_on[lane] && (y >= SPRITE_Y0) &&
                   (x >= spr_x0) && (spr_col < 16) && spr_bits[15 - spr_col];
+
+    // ---- under the white line: the lane names, hidden while that lane's sprite shows ----
+    wire label_on;
+    lane_label #(.SCREEN(SCREEN)) labels (.x(x), .y(y), .hide(spr_on), .on(label_on));
 
     // ---- the playing field, top layer first ----
     reg [15:0] field;
@@ -416,6 +496,7 @@ module screen_layout #(parameter SCREEN = 0) (
         else if (show_play && mark_on)          field = mark_colour;
         else if (show_play && on_tile)          field = tile_colour;
         else if (y == HIT_Y)                    field = sync_fx_on ? GOLD : WHITE;
+        else if (label_on)                      field = LABEL;
         else if (y >= PAD_Y0 && in_lane)        field = PAD;
         else if (is_divider)                    field = DIVIDER;
         else                                    field = BLACK;

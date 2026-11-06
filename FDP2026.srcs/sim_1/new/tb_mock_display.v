@@ -44,9 +44,9 @@ module tb_mock_display;
         .pno_ev_valid(8'd0), .pno_ev_time(144'd0), .pno_ev_lane(24'd0), .pno_ev_sync(8'd0),
         .drm_ev_valid(8'd0), .drm_ev_time(144'd0), .drm_ev_lane(24'd0), .drm_ev_sync(8'd0),
         .judge_pulse(1'b0), .judge_player(1'b0), .judge_grade(2'd0), .judge_lane(3'd0), .judge_target_ms(18'd0), .judge_hit_ms(18'd0),
-        .sync_pulse(1'b0), .sync_ok(1'b0),
+        .judge_id(8'd0), .sync_pulse(1'b0), .sync_ok(1'b0), .sync_id(8'd0),
         .pno_score(16'd0), .drm_score(16'd0), .pno_combo(8'd0), .drm_combo(8'd0),
-        .difficulty(2'd0), .mult(4'd1), .buff_ms_left(12'd0),
+        .song_select(2'd0), .mult(4'd1), .buff_ms_left(12'd0),
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
     );

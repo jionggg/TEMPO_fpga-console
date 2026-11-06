@@ -1,4 +1,6 @@
-// My_Top_Module.v | v3 | 04 Nov 2026 23:15 SGT
+// My_Top_Module.v | v4 | 06 Nov 2026 SGT
+// v4 (Ji Yong): C's difficulty output became song_select (more_songs PR); it now goes to
+//     D for the menu. D also gets B's judge_id / sync_id (green or orange SYNC'D).
 // v3: audio debug from A on the board: 7-segment (seg/dp/an, always) and LEDs when sw[1] is up.
 `timescale 1ns / 1ps
 
@@ -98,12 +100,12 @@ module My_Top_Module (
     wire [8*3-1:0]  pno_ev_lane;          // slot i = pno_ev_lane[i*3 +: 3]; 0..4 = C..G
     wire [7:0]      drm_ev_valid, drm_ev_sync;
     wire [8*18-1:0] drm_ev_time;
-    wire [8*3-1:0]  drm_ev_lane;          // 0 crash, 1 snare, 2 bass
+    wire [8*3-1:0]  drm_ev_lane;          // 0 hi-hat (DRUM_CRASH), 1 snare, 2 bass
 
     // C -> D: scores
     wire [15:0] pno_score, drm_score;
     wire [7:0]  pno_combo, drm_combo;
-    wire [1:0]  difficulty;
+    wire [1:0]  song_select;          // menu choice 0..2 (btnU / btnD in MENU)
 
     // C -> D: sync buff (PROPOSED by D, not in game_intel). Tied to "no buff" so D's
     // ribbon hides the xN and the fuse. If Meiyi adds these outputs, delete the "= ..."
@@ -179,7 +181,7 @@ module My_Top_Module (
         .drm_ev_lane(drm_ev_lane),   .drm_ev_sync(drm_ev_sync),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
-        .difficulty(difficulty)
+        .song_select(song_select)
     );
 
     display_top member_d (                // Ji Yong
@@ -193,10 +195,11 @@ module My_Top_Module (
         .judge_pulse(judge_pulse), .judge_player(judge_player),
         .judge_grade(judge_grade), .judge_lane(judge_lane),
         .judge_target_ms(judge_target_ms), .judge_hit_ms(judge_hit_ms),
-        .sync_pulse(sync_pulse), .sync_ok(sync_ok),
+        .judge_id(judge_id),
+        .sync_pulse(sync_pulse), .sync_ok(sync_ok), .sync_id(sync_id),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
-        .difficulty(difficulty),
+        .song_select(song_select),
         .mult(mult), .buff_ms_left(buff_ms_left),
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
