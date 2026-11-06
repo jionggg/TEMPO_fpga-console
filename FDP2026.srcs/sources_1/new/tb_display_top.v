@@ -79,10 +79,11 @@ module tb_display_top;
         .drm_ev_lane(drm_ev_lane), .drm_ev_sync(drm_ev_sync),
         .judge_pulse(judge_pulse), .judge_player(judge_player),
         .judge_grade(judge_grade), .judge_lane(judge_lane),
+        .judge_target_ms(18'd0), .judge_hit_ms(18'd0),
         .sync_pulse(sync_pulse), .sync_ok(sync_ok),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
-        .difficulty(difficulty),
+        .difficulty(difficulty), .mult(4'd3), .buff_ms_left(12'd1500),   // x3, half a buff left
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
     );

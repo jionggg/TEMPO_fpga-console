@@ -4,7 +4,7 @@
     "xci_name": "xfft_0",
     "component_reference": "xilinx.com:ip:xfft:9.1",
     "ip_revision": "15",
-    "gen_directory": "../../../../PianoTiles.gen/sources_1/ip/xfft_0",
+    "gen_directory": "../../../../FDP2026.gen/sources_1/ip/xfft_0",
     "parameters": {
       "component_parameters": {
         "Component_Name": [ { "value": "xfft_0", "resolve_type": "user", "usage": "all" } ],
@@ -13,7 +13,7 @@
         "target_clock_frequency": [ { "value": "100", "value_src": "user", "resolve_type": "user", "format": "long", "usage": "all" } ],
         "implementation_options": [ { "value": "radix_2_burst_io", "value_src": "user", "resolve_type": "user", "usage": "all" } ],
         "target_data_throughput": [ { "value": "50", "resolve_type": "user", "format": "long", "usage": "all" } ],
-        "run_time_configurable_transform_length": [ { "value": "false", "resolve_type": "user", "format": "bool", "usage": "all" } ],
+        "run_time_configurable_transform_length": [ { "value": "false", "value_src": "user", "resolve_type": "user", "format": "bool", "usage": "all" } ],
         "data_format": [ { "value": "fixed_point", "value_src": "user", "resolve_type": "user", "usage": "all" } ],
         "input_width": [ { "value": "16", "resolve_type": "user", "usage": "all" } ],
         "phase_factor_width": [ { "value": "16", "resolve_type": "user", "usage": "all" } ],
@@ -93,7 +93,7 @@
         "IPCONTEXT": [ { "value": "IP_Flow" } ],
         "IPREVISION": [ { "value": "15" } ],
         "MANAGED": [ { "value": "TRUE" } ],
-        "OUTPUTDIR": [ { "value": "../../../../PianoTiles.gen/sources_1/ip/xfft_0" } ],
+        "OUTPUTDIR": [ { "value": "../../../../FDP2026.gen/sources_1/ip/xfft_0" } ],
         "SELECTEDSIMMODEL": [ { "value": "" } ],
         "SHAREDDIR": [ { "value": "." } ],
         "SWVERSION": [ { "value": "2025.2" } ],
@@ -325,5 +325,5 @@
       }
     }
   },
-  "checksum": "dfa7e61f"
+  "checksum": "04e9ed18"
 }

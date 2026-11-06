@@ -1,25 +1,11 @@
-`timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 30.10.2026 02:31:01
-// Design Name: 
-// Module Name: pattern_gen
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-// ============================================================================
-
+// pattern_gen.v | v2 | 04 Nov 2026 22:45 SGT
+// v2 (timing fix by A for C to review; behaviour unchanged):
+//   - the song ROM output is registered (rom_data_q). rom_addr only changes on a song-clock
+//     step (once per ms at most), so the register is always up to date when it is used.
+//   - head expiry uses a registered deadline (head time + HIT_WINDOW_MS); it only counts
+//     when the registered head ID still matches the live head, so a just-popped or
+//     just-pushed head is never expired by a stale deadline (it waits 1 clock instead).
+//   v1 failed timing at 100 MHz in the full team build (paths into the queues).
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
@@ -115,17 +101,20 @@ module pattern_gen (
     // ------------------------------------------------------------------------
     reg  [5:0]  rom_addr;
     wire [31:0] rom_data;
+    reg  [31:0] rom_data_q = 32'd0;       // v2: registered ROM output
 
     song_rom u_song_rom (
         .addr(rom_addr),
         .event_data(rom_data)
     );
 
-    wire [17:0] rom_time_ms = {2'b00, rom_data[31:16]};
-    wire [1:0]  rom_type    = rom_data[15:14];
-    wire [3:0]  rom_piano   = rom_data[13:10];
-    wire [3:0]  rom_drum    = rom_data[9:6];
-    wire [5:0]  rom_id      = rom_data[5:0];
+    always @(posedge clk) rom_data_q <= rom_data;
+
+    wire [17:0] rom_time_ms = {2'b00, rom_data_q[31:16]};
+    wire [1:0]  rom_type    = rom_data_q[15:14];
+    wire [3:0]  rom_piano   = rom_data_q[13:10];
+    wire [3:0]  rom_drum    = rom_data_q[9:6];
+    wire [5:0]  rom_id      = rom_data_q[5:0];
 
     wire rom_piano_valid = (rom_type == EVENT_PIANO) ||
                            (rom_type == EVENT_DUET);
@@ -209,12 +198,25 @@ module pattern_gen (
                                  drm_queue_head_valid &&
                                  (drm_judged_id == drm_queue_head_id);
 
-    wire pno_expected_expired = pno_queue_head_valid &&
-                                 (song_time_ms >
-                                  (pno_queue_head_time + HIT_WINDOW_MS));
-    wire drm_expected_expired = drm_queue_head_valid &&
-                                 (song_time_ms >
-                                  (drm_queue_head_time + HIT_WINDOW_MS));
+    // v2: registered head deadlines; used only while the registered ID matches the live head
+    reg [17:0] pno_head_deadline = 18'd0, drm_head_deadline = 18'd0;
+    reg [5:0]  pno_head_id_q = 6'd0,      drm_head_id_q = 6'd0;
+    reg        pno_head_valid_q = 1'b0,   drm_head_valid_q = 1'b0;
+    always @(posedge clk) begin
+        pno_head_deadline <= pno_queue_head_time + HIT_WINDOW_MS;
+        drm_head_deadline <= drm_queue_head_time + HIT_WINDOW_MS;
+        pno_head_id_q     <= pno_queue_head_id;
+        drm_head_id_q     <= drm_queue_head_id;
+        pno_head_valid_q  <= pno_queue_head_valid;
+        drm_head_valid_q  <= drm_queue_head_valid;
+    end
+
+    wire pno_expected_expired = pno_queue_head_valid && pno_head_valid_q &&
+                                 (pno_head_id_q == pno_queue_head_id) &&
+                                 (song_time_ms > pno_head_deadline);
+    wire drm_expected_expired = drm_queue_head_valid && drm_head_valid_q &&
+                                 (drm_head_id_q == drm_queue_head_id) &&
+                                 (song_time_ms > drm_head_deadline);
 
     wire queue_clear = rewound;
 
@@ -345,5 +347,3 @@ module pattern_gen (
         end
     end
 endmodule
-
-

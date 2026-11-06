@@ -1,4 +1,19 @@
-// event_detector.v | v3 | 02 Nov 2026 23:40 SGT
+// event_detector.v | v5 | 06 Nov 2026 11:00 SGT
+// v5: piano note accuracy (each change has its own on/off parameter; set all three to 0
+//     to get exactly the v4 behaviour back):
+//     RESTRICT_5   = 1: the note is chosen only among C4..G4, the 5 notes the game uses.
+//                       A4/B4/C5 were only ever wrong answers (a hard F4's 5th harmonic sits
+//                       next to A4's 4th harmonic bin, so a bright F could be reported as A).
+//     SOFT_OR      = 1: a note no longer NEEDS the hammer click (the 8 dB high-frequency jump).
+//                       It is also accepted when its harmonics jumped strongly (> 8x in 3
+//                       frames). Soft strikes have a weak click and were being missed.
+//                       Drums always make the click, so this should not add drum false notes.
+//     ABS_SHIFT    = 1: the minimum loudness NOTE_ABS is halved (shift right by 1), so softer
+//                       notes pass. 0 = v4 level. Raise back to 0 if false notes appear.
+// v4: timing fix only (results bit-identical to v3). The note jumps d1/d2 for all 8 notes are
+//     now computed in a new state S_DIF and registered, so S_ARG only does one 44-bit compare
+//     per clock (v3 did mux + compare + subtract + compare in one clock and failed timing
+//     in the full team build).
 `timescale 1ns / 1ps
 // Decides drum hits and piano notes from the per-frame features (one frame every 16 ms).
 // It keeps a short history of frames and judges an OLDER frame t once enough later frames
@@ -33,7 +48,10 @@ module event_detector #(
     parameter [43:0] NF_ABS      = 44'd98,
     parameter [43:0] NOTE_ABS    = 44'd292969,
     parameter [31:0] DRUM_OFFSET = 32'd311,
-    parameter [31:0] NOTE_OFFSET = 32'd253
+    parameter [31:0] NOTE_OFFSET = 32'd253,
+    parameter        RESTRICT_5  = 1,        // v5: choose the note among C4..G4 only
+    parameter        SOFT_OR     = 1,        // v5: click OR strong harmonic jump
+    parameter integer ABS_SHIFT  = 1         // v5: NOTE_ABS >> ABS_SHIFT
 )(
     input  wire         clk,
     input  wire         rst,
@@ -63,7 +81,8 @@ module event_detector #(
     reg [5:0]  drum_age;             // frames since last drum trigger
 
     localparam S_IDLE=4'd0, S_ARG=4'd1, S_NP=4'd2, S_NC=4'd3, S_ND=4'd4,
-               S_DA=4'd5, S_DB=4'd6, S_DP=4'd7, S_DC=4'd8, S_DD=4'd9;
+               S_DA=4'd5, S_DB=4'd6, S_DP=4'd7, S_DC=4'd8, S_DD=4'd9,
+               S_DIF=4'd10;
     reg [3:0]  st;
     reg [2:0]  idx;
     reg [2:0]  b1, b2;               // loudest note at t (index 2) and at t+2 (index 0)
@@ -72,18 +91,23 @@ module event_detector #(
     reg        c_jump;
     // registered products
     reg [53:0] m_rise, m_ehf_l, m_ehf_r, m_odd, m_main;
+    reg [53:0] m_rise8;                  // v5: 8 x S_b(t-3), for the strong-jump test
+    reg        c_rise8;                  // v5: S_b(t) > 8 x S_b(t-3)
+    localparam [43:0] NOTE_ABS_EFF = NOTE_ABS >> ABS_SHIFT;
+    localparam [2:0]  LAST_IDX     = RESTRICT_5 ? 3'd4 : 3'd7;   // C4..G4 or C4..C5
     reg [53:0] m_trig, m_kick, m_snare, m_cok;
     reg [63:0] m_copk, m_col6;
     reg        c_rise, c_hf, c_abs, c_c4;
     reg [43:0] pk, late, late6, sn_win;
     reg        d_trig, c_co, c_codet, c_cokick, c_kick, c_snare;
 
+    // v4: how much each note JUMPED since 3 frames ago (0 if it fell), registered in S_DIF
+    reg  [43:0] d1_r [0:7];          // frame t   (index 2) vs t-3 (index 5)
+    reg  [43:0] d2_r [0:7];          // frame t+2 (index 0) vs t-3 (index 5)
     wire [43:0] s2_idx = S_h[2][idx];
     wire [43:0] s0_idx = S_h[0][idx];
-    wire [43:0] s5_idx = S_h[5][idx];
-    // v3: how much each note JUMPED since 3 frames ago (0 if it fell)
-    wire [43:0] d1_idx = (s2_idx > s5_idx) ? (s2_idx - s5_idx) : 44'd0;
-    wire [43:0] d2_idx = (s0_idx > s5_idx) ? (s0_idx -  s5_idx) : 44'd0;
+    wire [43:0] d1_idx = d1_r[idx];
+    wire [43:0] d2_idx = d2_r[idx];
     wire [43:0] nf_max = (NF_h[2] > NF_h[1]) ? NF_h[2] : NF_h[1];
     wire [43:0] e_max  = (E_h[2] > E_h[1]) ? E_h[2] : E_h[1];
     wire [43:0] sn_a   = (SN_h[11] > SN_h[12]) ? SN_h[11] : SN_h[12];
@@ -99,6 +123,7 @@ module event_detector #(
             note_code <= 4'd0; note_valid <= 1'b0; note_timestamp <= 32'd0;
             b1 <= 3'd0; b2 <= 3'd0; best1 <= 44'd0; best2 <= 44'd0;
             bestd1 <= 44'd0; bestd2 <= 44'd0; m_nf5 <= 54'd0; c_jump <= 1'b0;
+            m_rise8 <= 54'd0; c_rise8 <= 1'b0;
             m_rise <= 54'd0; m_ehf_l <= 54'd0; m_ehf_r <= 54'd0; m_odd <= 54'd0; m_main <= 54'd0;
             m_trig <= 54'd0; m_kick <= 54'd0; m_snare <= 54'd0; m_cok <= 54'd0;
             m_copk <= 64'd0; m_col6 <= 64'd0;
@@ -107,6 +132,7 @@ module event_detector #(
             d_trig <= 1'b0; c_co <= 1'b0; c_codet <= 1'b0; c_cokick <= 1'b0;
             c_kick <= 1'b0; c_snare <= 1'b0;
             odd0 <= 44'd0; main0 <= 44'd0;
+            for (n = 0; n < 8; n = n + 1) begin d1_r[n] <= 44'd0; d2_r[n] <= 44'd0; end
             for (i = 0; i < 16; i = i + 1) begin
                 NF_h[i] <= 44'd0; SN_h[i] <= 44'd0; T_h[i] <= 32'd0;
             end
@@ -136,18 +162,27 @@ module event_detector #(
                     if (note_age    != 6'd63) note_age    <= note_age + 1'b1;
                     if (drum_age    != 6'd63) drum_age    <= drum_age + 1'b1;
                     idx <= 3'd0;
-                    st  <= S_ARG;
+                    st  <= S_DIF;
+                end
+                // ---- 1b. (v4) note jumps for all 8 notes at once, registered ----
+                S_DIF: begin
+                    for (n = 0; n < 8; n = n + 1) begin
+                        d1_r[n] <= (S_h[2][n] > S_h[5][n]) ? (S_h[2][n] - S_h[5][n]) : 44'd0;
+                        d2_r[n] <= (S_h[0][n] > S_h[5][n]) ? (S_h[0][n] - S_h[5][n]) : 44'd0;
+                    end
+                    st <= S_ARG;
                 end
                 // ---- 2. loudest note in frame t and in frame t+2 (first maximum wins) ----
                 S_ARG: begin
                     if (idx == 3'd0 || d1_idx > bestd1) begin bestd1 <= d1_idx; best1 <= s2_idx; b1 <= idx; end
                     if (idx == 3'd0 || d2_idx > bestd2) begin bestd2 <= d2_idx; best2 <= s0_idx; b2 <= idx; end
                     idx <= idx + 1'b1;
-                    if (idx == 3'd7) st <= S_NP;
+                    if (idx == LAST_IDX) st <= S_NP;
                 end
                 // ---- 3. note products ----
                 S_NP: begin
                     m_rise  <= {10'd0, S_h[5][b1]} * 54'd2;      // v3: x2 (was x4)
+                    m_rise8 <= {10'd0, S_h[5][b1]} * 54'd8;      // v5: strong harmonic jump
                     m_nf5   <= {10'd0, NF_h[5]}    * 54'd4;
                     m_ehf_l <= {10'd0, e_max}      * 54'd4;
                     m_ehf_r <= {10'd0, E_h[5]}     * 54'd25;
@@ -160,13 +195,16 @@ module event_detector #(
                     c_rise <= {10'd0, best1} > m_rise;
                     c_jump <= (bestd1 != 44'd0) && (bestd2 != 44'd0);
                     c_hf   <= (m_ehf_l > m_ehf_r) || ({10'd0, nf_max} > m_nf5);   // v3: or noise-floor click
-                    c_abs  <= best2 > NOTE_ABS;
+                    c_rise8 <= {10'd0, best1} > m_rise8;
+                    c_abs  <= best2 > NOTE_ABS_EFF;              // v5: was NOTE_ABS
                     c_c4   <= m_odd > m_main;
                     st <= S_ND;
                 end
                 // ---- 5. note decision (onset frame t = index 2) ----
                 S_ND: begin
-                    if (frames_seen >= 6'd6 && note_age >= 6'd10 && c_jump && c_rise && c_hf && c_abs) begin
+                    // v5: with SOFT_OR the click (c_hf) can be replaced by a strong harmonic jump
+                    if (frames_seen >= 6'd6 && note_age >= 6'd10 && c_jump && c_rise && c_abs &&
+                        (c_hf || (SOFT_OR && c_rise8))) begin
                         note_age       <= 6'd0;
                         SN_h[2]        <= best2;            // remembered for the drum check
                         note_code      <= ((b2 == 3'd7) && c_c4) ? 4'd1 : ({1'b0, b2} + 4'd1);

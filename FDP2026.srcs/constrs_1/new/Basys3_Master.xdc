@@ -1,3 +1,9 @@
+## Basys3_Master.xdc | v3 | 04 Nov 2026 23:15 SGT
+## v3: 7-segment pins (seg/dp/an) back on: the top now drives them (A's audio debug).
+## v2: commented out pins that My_Top_Module did not have (RsTx, JC[1], and the 7-segment
+##     until v3), which gave "set_property expects at least one object" critical warnings.
+## Note: port JA (piano OLED) is on the board's JB header and port JB (drum OLED) is on the
+##     board's JA header, as Ji Yong set it up on 25 Oct.
 ## This file is a general .xdc for the Basys3 rev B board
 ## To use it in a project:
 ## - uncomment the lines corresponding to used pins
@@ -92,7 +98,7 @@ set_property -dict { PACKAGE_PIN C16   IOSTANDARD LVCMOS33 } [get_ports {JA[7]}]
 ##Pmod Header JC
 #set_property -dict { PACKAGE_PIN K17   IOSTANDARD LVCMOS33 } [get_ports {JC[0]}];#Sch name = JC1
 set_property -dict { PACKAGE_PIN K17   IOSTANDARD LVCMOS33 } [get_ports {mic_cs}];#Sch name = JC1
-set_property -dict { PACKAGE_PIN M18   IOSTANDARD LVCMOS33 } [get_ports {JC[1]}];#Sch name = JC2
+#set_property -dict { PACKAGE_PIN M18   IOSTANDARD LVCMOS33 } [get_ports {JC[1]}];#Sch name = JC2
 #set_property -dict { PACKAGE_PIN N17   IOSTANDARD LVCMOS33 } [get_ports {JC[2]}];#Sch name = JC3
 #set_property -dict { PACKAGE_PIN P18   IOSTANDARD LVCMOS33 } [get_ports {JC[3]}];#Sch name = JC4
 set_property -dict { PACKAGE_PIN N17   IOSTANDARD LVCMOS33 } [get_ports {mic_miso}];#Sch name = JC3
@@ -132,7 +138,7 @@ set_property -dict { PACKAGE_PIN P18   IOSTANDARD LVCMOS33 } [get_ports {mic_scl
 
 ##USB-RS232 Interface
 #set_property -dict { PACKAGE_PIN B18   IOSTANDARD LVCMOS33 } [get_ports RsRx]
-set_property -dict { PACKAGE_PIN A18   IOSTANDARD LVCMOS33 } [get_ports RsTx]
+#set_property -dict { PACKAGE_PIN A18   IOSTANDARD LVCMOS33 } [get_ports RsTx]
 
 
 ##USB HID (PS/2)
@@ -157,4 +163,4 @@ set_property CFGBVS VCCO [current_design]
 ## SPI configuration mode options for QSPI boot, can be used for all designs
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]
 set_property BITSTREAM.CONFIG.CONFIGRATE 33 [current_design]
-set_property CONFIG_MODE SPIx4 [current_design]
+set_property CONFIG_MODE SPIx4 [current_design] 

@@ -1,3 +1,6 @@
+// TEMPO_defs.vh | v2 | 04 Nov 2026 18:00 SGT
+// v2_Annanya: fixed TEMPO_DRUM_LANE_BASS (was DRUM_KICK, which does not exist -> compile error).
+//     A's hi-hat class is judged on the DRUM_CRASH lane (team decision 04 Nov).
 // tempo_defs.vh - str codes every module agrees on
 
 // to call this header file INSIDE a module, after the port list:
@@ -32,6 +35,7 @@ localparam [2:0] NOTE_C = 3'd0,
 localparam       PIANO_LANES = 5;
 
 // Drums (det_is_drum = 1, exp_is_drum = 1, judge_player = 1): one lane per drum
+// (A detects kick -> DRUM_BASS, snare -> DRUM_SNARE, hi-hat/cymbal -> DRUM_CRASH)
 // left to right on the drum OLED
 localparam [2:0] DRUM_CRASH = 3'd0,
                  DRUM_SNARE = 3'd1,   
@@ -117,6 +121,4 @@ localparam [3:0] TEMPO_PIANO_FIRST_NOTE  = ROM_PIANO_FIRST_NOTE;
 localparam [3:0] TEMPO_PIANO_NOTE_OFFSET = ROM_PIANO_NOTE_OFFSET;
 
 localparam [2:0] TEMPO_DRUM_LANE_SNARE = DRUM_SNARE;
-localparam [2:0] TEMPO_DRUM_LANE_BASS  = DRUM_KICK;
-
-
+localparam [2:0] TEMPO_DRUM_LANE_BASS  = DRUM_BASS;

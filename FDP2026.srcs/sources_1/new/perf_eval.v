@@ -1,3 +1,16 @@
+// perf_eval.v | v4 | 06 Nov 2026 SGT
+// v4 (added by D, Ji Yong, for B to review; judging behaviour unchanged): two extra
+//   outputs, judge_target_ms and judge_hit_ms, valid with each judge_pulse, so D can draw
+//   how early / late a hit was. judge_hit_ms = 0 when nothing was hit (expired MISS).
+// v3 (timing fix by A for B to review; judging behaviour unchanged):
+//   - A's reports go through 2 register stages before the engine's queues:
+//     R1 = age and since-play-start subtractions, R2 = onset time in song ms + lane/ok flags.
+//     Reports reach the engine 2 clocks (20 ns) later; timestamps are unchanged.
+//   - C's expected-event heads are registered once (C holds them as levels).
+//   - now_ms and the engine reset are registered (1 clock later).
+//   v2 failed timing at 100 MHz in the full team build (paths into the engine's
+//   hit queues and targets/lanes tables).
+// v2 (04 Nov): A's hi-hat (drum_type 3) maps to the crash lane (0) instead of being ignored.
 `timescale 1ns / 1ps
 
 // Member B: Pei Ling - performance evaluation (match hits, grade, sync judge)
@@ -24,6 +37,8 @@ module perf_eval #(
     output [5:0] pno_judged_id, output [5:0] drm_judged_id,
     output judge_pulse, output judge_player, output [2:0] judge_lane,
     output [1:0] judge_grade, output [7:0] judge_id,
+    output [17:0] judge_target_ms,       // v4: when the judged note was due (song ms)
+    output [17:0] judge_hit_ms,          // v4: when it was actually hit, 0 = not hit
     output sync_pulse, output sync_ok, output [7:0] sync_id,
     output det_overflow, output pending
 );
@@ -152,6 +167,8 @@ module perf_eval #(
         .pno_judged_id(pno_judged_id),.drm_judged_id(drm_judged_id),
         .judge_pulse(judge_pulse),.judge_player(judge_player),.judge_lane(judge_lane),
         .judge_grade(judge_grade),.judge_id(judge_id),
+        .judge_target_ms(judge_target_ms),.judge_hit_ms(judge_hit_ms),
         .sync_pulse(sync_pulse),.sync_ok(sync_ok),.sync_id(sync_id),
         .det_overflow(det_overflow),.pending(pending));
 endmodule
+

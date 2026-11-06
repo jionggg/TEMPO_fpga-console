@@ -43,10 +43,10 @@ module tb_mock_display;
         .game_state(3'd0), .countdown_num(2'd0), .song_time_ms(18'd0), .song_len_ms(18'd0),
         .pno_ev_valid(8'd0), .pno_ev_time(144'd0), .pno_ev_lane(24'd0), .pno_ev_sync(8'd0),
         .drm_ev_valid(8'd0), .drm_ev_time(144'd0), .drm_ev_lane(24'd0), .drm_ev_sync(8'd0),
-        .judge_pulse(1'b0), .judge_player(1'b0), .judge_grade(2'd0), .judge_lane(3'd0),
+        .judge_pulse(1'b0), .judge_player(1'b0), .judge_grade(2'd0), .judge_lane(3'd0), .judge_target_ms(18'd0), .judge_hit_ms(18'd0),
         .sync_pulse(1'b0), .sync_ok(1'b0),
         .pno_score(16'd0), .drm_score(16'd0), .pno_combo(8'd0), .drm_combo(8'd0),
-        .difficulty(2'd0),
+        .difficulty(2'd0), .mult(4'd1), .buff_ms_left(12'd0),
         .pno_index(pno_index), .pno_colour(pno_colour),
         .drm_index(drm_index), .drm_colour(drm_colour)
     );
@@ -86,10 +86,14 @@ module tb_mock_display;
 
     initial begin
         #20;
-        run_song_to(1000); dump_frames(1000);    // first tiles falling in from the top
-        run_song_to(1700); dump_frames(1700);
-        run_song_to(2048); dump_frames(2048);    // beat 4 (sync) exactly on the hit line
-        run_song_to(2200); dump_frames(2200);    // 152 ms late: just below the line
+        run_song_to(1000);  dump_frames(1000);   // first tiles falling in, scores 0, no buff
+        run_song_to(2048);  dump_frames(2048);   // beat 4 (sync) exactly on the hit line
+        run_song_to(2100);  dump_frames(2100);   // beat 4 judged: GOOD sync -> x2, gold hit line
+        run_song_to(3600);  dump_frames(3600);   // beat 7: piano MISS; x2 fuse about half burnt
+        run_song_to(8300);  dump_frames(8300);   // beat 16: PERFECT sync -> new buff x3
+        run_song_to(10400); dump_frames(10400);  // beat 20: GOOD sync during the buff -> x4, refilled
+        run_song_to(12500); dump_frames(12500);  // beat 24: sync MISS; x4 fuse nearly gone
+        run_song_to(13400); dump_frames(13400);  // buff ran out: back to x1, fuse is a grey line
         $finish;
     end
 
