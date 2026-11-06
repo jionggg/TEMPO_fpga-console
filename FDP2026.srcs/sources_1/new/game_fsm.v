@@ -19,13 +19,7 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 // ============================================================================
-// TEMPO game_fsm wrapper
-//
-// This is the only module that needs to be connected to the other TEMPO
-// modules. Its external interface matches the UML diagram.
-// ============================================================================
 
-`timescale 1ns / 1ps
 // ============================================================================
 // TEMPO game FSM (top module)
 //
@@ -144,12 +138,12 @@ module game_fsm #(
     // btnC has priority if it is pressed in the same cycle as up/down.
     always @(posedge clk or posedge rst) begin
         if (rst)
-            song_select <= 2'd0;
+            song_select <= SONG_1;
         else if (game_state == ST_MENU && !c_press) begin
             if (u_press && !d_press)
-                song_select <= (song_select == 2'd0) ? 2'd2 : song_select - 2'd1;
+                song_select <= (song_select == SONG_1) ? SONG_3 : song_select - 2'd1;
             else if (d_press && !u_press)
-                song_select <= (song_select == 2'd2) ? 2'd0 : song_select + 2'd1;
+                song_select <= (song_select == SONG_3) ? SONG_1 : song_select + 2'd1;
         end
     end
 
