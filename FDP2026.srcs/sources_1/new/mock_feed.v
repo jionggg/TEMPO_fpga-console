@@ -6,7 +6,7 @@
 //
 // The song: one beat every 512 ms (about 117 beats per minute).
 //   piano: a note on every beat, melody C E G E F D E C, repeating every 8 beats
-//   drums: crash, -, snare, -, bass, bass, snare, -   (repeating every 8 beats)
+//   drums: hi-hat, -, snare, -, bass, bass, snare, -   (repeating every 8 beats)
 //   every 4th beat is a sync beat: piano and drum land together (white rim)
 // The first 4 beats are left empty, so the first tiles fall in from the top.
 //
@@ -149,7 +149,7 @@ module mock_beat (
     output           sync
     );
 
-    `include "TEMPO_defs.vh"       // NOTE_C .. NOTE_G, DRUM_CRASH / SNARE / BASS
+    `include "TEMPO_defs.vh"       // NOTE_C .. NOTE_G, DRUM_CRASH (the hi-hat lane) / SNARE / BASS
 
     always @(*) begin
         case (beat[2:0])            // position inside the 8-beat bar pair
@@ -177,7 +177,7 @@ endmodule
 // the real modules exist. It pretends both players hit every note of mock_feed's
 // song as its hit time arrives, with made-up grades:
 //   piano: PERFECT, but GOOD on beats 2, 6, 10, ... and MISS on beats 7, 15, 23, ...
-//   drums: PERFECT on the bass, GOOD on crash and snare, MISS on beats 6, 14, 22, ...
+//   drums: PERFECT on the bass, GOOD on hi-hat and snare, MISS on beats 6, 14, 22, ...
 //   every 4th beat is a sync pair, graded in a cycle of 16 beats:
 //   PERFECT, GOOD, MISS, MISS   (so buffs start, grow, run out and come back)
 // Scores: PERFECT = 100 x mult, GOOD = 50 x mult, MISS = 0.
@@ -202,8 +202,10 @@ module mock_judge (
     output reg [2:0]   judge_lane   = 0,
     output reg [17:0]  judge_target_ms = 0,   // when the judged beat was due
     output reg [17:0]  judge_hit_ms    = 0,   // when it was "hit" (0 = not hit)
+    output reg [7:0]   judge_id     = 0,      // the beat number: a duet's halves share it
     output reg         sync_pulse   = 0,
     output reg         sync_ok      = 0,
+    output reg [7:0]   sync_id      = 0,
     // like Meiyi's outputs
     output reg [15:0]  pno_score    = 0,
     output reg [15:0]  drm_score    = 0,
@@ -286,6 +288,7 @@ module mock_judge (
                               judge_lane   <= pno_lane;
                               judge_target_ms <= beat_ms;
                               judge_hit_ms    <= (pno_grade == GRADE_MISS) ? 18'd0 : beat_ms + pno_off - 18'd200;
+                              judge_id     <= {2'b00, beat[5:0]};
                               pno_score    <= pno_score + pno_points;
                           end
                           step <= 2'd2;
@@ -298,6 +301,7 @@ module mock_judge (
                               judge_lane   <= drm_lane;
                               judge_target_ms <= beat_ms;
                               judge_hit_ms    <= (drm_grade == GRADE_MISS) ? 18'd0 : beat_ms + drm_off - 18'd200;
+                              judge_id     <= {2'b00, beat[5:0]};
                               drm_score    <= drm_score + drm_points;
                           end
                           step <= 2'd3;
@@ -306,6 +310,7 @@ module mock_judge (
                           if (beat >= 4 && is_sync) begin
                               sync_pulse <= 1;
                               sync_ok    <= (sync_grade != GRADE_MISS);
+                              sync_id    <= {2'b00, beat[5:0]};
                               // the buff rule. These lines come after section 3, so if
                               // both happen on the same clock, these win.
                               if (sync_grade != GRADE_MISS) begin

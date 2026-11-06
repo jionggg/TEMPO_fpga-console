@@ -7,9 +7,11 @@
 // and the light stays on for FX_MS (250 ms), then goes off by itself. A new
 // pulse restarts the timer. The grade and lane are remembered while it is on.
 //
-// Three timers: piano judgement, drum judgement, and the sync flash.
+// Three timers: piano judgement, drum judgement, and the sync flash (gold hit line and
+// the SYNC'D word, which also remembers whether the duet was PERFECT + PERFECT).
 // Plus one small timer per lane (5 piano + 3 drum) for the hit sprites, started only
 // by a real hit (PERFECT or GOOD), so two quick hits in different lanes both show.
+// Plus one per score: the score turns green for 250 ms each time it goes up.
 //////////////////////////////////////////////////////////////////////////////////
 
 module fx_timers (
@@ -23,6 +25,10 @@ module fx_timers (
     input      [2:0]  judge_lane,
     input             sync_pulse,       // 1 clk per sync pair judged
     input             sync_ok,          // 1 = the pair was in sync
+    input             sync_perfect,     // with sync_pulse: both halves were PERFECT
+    // from display_top: a score just went up (1 clk)
+    input             pno_up,
+    input             drm_up,
     // what to show
     output            pno_fx_on,        // piano judgement is showing
     output reg [1:0]  pno_fx_grade = 0,
@@ -30,9 +36,12 @@ module fx_timers (
     output            drm_fx_on,        // drum judgement is showing
     output reg [1:0]  drm_fx_grade = 0,
     output reg [2:0]  drm_fx_lane  = 0,
-    output            sync_fx_on,       // gold hit line is showing
+    output            sync_fx_on,       // gold hit line and SYNC'D are showing
+    output reg        sync_fx_perfect = 0,  // ... green SYNC'D (1) or orange (0)
     output     [4:0]  pno_spr_on,       // bit L = piano lane L's hit sprite is showing
-    output     [2:0]  drm_spr_on        // bit L = drum lane L's hit sprite is showing
+    output     [2:0]  drm_spr_on,       // bit L = drum lane L's hit sprite is showing
+    output            pno_flash,        // pianist's score is green
+    output            drm_flash         // drummer's score is green
     );
 
     `include "TEMPO_layout.vh"     // FX_MS
@@ -64,9 +73,10 @@ module fx_timers (
                 drm_left <= drm_left - 1;
 
             // sync: only a successful pair lights the hit lines
-            if (sync_pulse && sync_ok)
-                sync_left <= FX_MS;
-            else if (ms_tick && sync_left != 0)
+            if (sync_pulse && sync_ok) begin
+                sync_left       <= FX_MS;
+                sync_fx_perfect <= sync_perfect;
+            end else if (ms_tick && sync_left != 0)
                 sync_left <= sync_left - 1;
         end
     end
@@ -89,6 +99,10 @@ module fx_timers (
     lane_timer d0 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(d_hit && judge_lane == 3'd0), .on(drm_spr_on[0]));
     lane_timer d1 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(d_hit && judge_lane == 3'd1), .on(drm_spr_on[1]));
     lane_timer d2 (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(d_hit && judge_lane == 3'd2), .on(drm_spr_on[2]));
+
+    // ---- score flashes: the same kind of stairwell light, one per score ----
+    lane_timer fp (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(pno_up), .on(pno_flash));
+    lane_timer fd (.clk(clk), .rst(rst), .ms_tick(ms_tick), .start(drm_up), .on(drm_flash));
 
 endmodule
 

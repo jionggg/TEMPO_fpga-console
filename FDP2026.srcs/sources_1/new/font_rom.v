@@ -12,7 +12,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 module font_rom (
-    input      [4:0]  code,     // which character
+    input      [5:0]  code,     // which character (6 bits since v5)
     output reg [34:0] glyph     // its 35 pixels, top row first
     );
 
@@ -20,70 +20,70 @@ module font_rom (
 
     always @(*) begin
         case (code)
-            5'd0: glyph = {5'b01110,
+            6'd0: glyph = {5'b01110,
                            5'b10001,
                            5'b10011,
                            5'b10101,
                            5'b11001,
                            5'b10001,
                            5'b01110};
-            5'd1: glyph = {5'b00100,
+            6'd1: glyph = {5'b00100,
                            5'b01100,
                            5'b00100,
                            5'b00100,
                            5'b00100,
                            5'b00100,
                            5'b01110};
-            5'd2: glyph = {5'b01110,
+            6'd2: glyph = {5'b01110,
                            5'b10001,
                            5'b00001,
                            5'b00010,
                            5'b00100,
                            5'b01000,
                            5'b11111};
-            5'd3: glyph = {5'b11111,
+            6'd3: glyph = {5'b11111,
                            5'b00010,
                            5'b00100,
                            5'b00010,
                            5'b00001,
                            5'b10001,
                            5'b01110};
-            5'd4: glyph = {5'b00010,
+            6'd4: glyph = {5'b00010,
                            5'b00110,
                            5'b01010,
                            5'b10010,
                            5'b11111,
                            5'b00010,
                            5'b00010};
-            5'd5: glyph = {5'b11111,
+            6'd5: glyph = {5'b11111,
                            5'b10000,
                            5'b11110,
                            5'b00001,
                            5'b00001,
                            5'b10001,
                            5'b01110};
-            5'd6: glyph = {5'b00110,
+            6'd6: glyph = {5'b00110,
                            5'b01000,
                            5'b10000,
                            5'b11110,
                            5'b10001,
                            5'b10001,
                            5'b01110};
-            5'd7: glyph = {5'b11111,
+            6'd7: glyph = {5'b11111,
                            5'b00001,
                            5'b00010,
                            5'b00100,
                            5'b01000,
                            5'b01000,
                            5'b01000};
-            5'd8: glyph = {5'b01110,
+            6'd8: glyph = {5'b01110,
                            5'b10001,
                            5'b10001,
                            5'b01110,
                            5'b10001,
                            5'b10001,
                            5'b01110};
-            5'd9: glyph = {5'b01110,
+            6'd9: glyph = {5'b01110,
                            5'b10001,
                            5'b10001,
                            5'b01111,
@@ -216,6 +216,55 @@ module font_rom (
                            5'b10001,
                            5'b10001,
                            5'b01110};
+            CH_H: glyph = {5'b10001,
+                           5'b10001,
+                           5'b10001,
+                           5'b11111,
+                           5'b10001,
+                           5'b10001,
+                           5'b10001};
+            CH_B: glyph = {5'b11110,
+                           5'b10001,
+                           5'b10001,
+                           5'b11110,
+                           5'b10001,
+                           5'b10001,
+                           5'b11110};
+            CH_Y: glyph = {5'b10001,
+                           5'b10001,
+                           5'b01010,
+                           5'b00100,
+                           5'b00100,
+                           5'b00100,
+                           5'b00100};
+            CH_AP: glyph = {5'b00100,           // apostrophe: a short tick at the top
+                            5'b00100,
+                            5'b01000,
+                            5'b00000,
+                            5'b00000,
+                            5'b00000,
+                            5'b00000};
+            CH_GT: glyph = {5'b01000,           // >
+                            5'b00100,
+                            5'b00010,
+                            5'b00001,
+                            5'b00010,
+                            5'b00100,
+                            5'b01000};
+            CH_LT: glyph = {5'b00010,           // <
+                            5'b00100,
+                            5'b01000,
+                            5'b10000,
+                            5'b01000,
+                            5'b00100,
+                            5'b00010};
+            CH_SL: glyph = {5'b00001,           // /
+                            5'b00010,
+                            5'b00010,
+                            5'b00100,
+                            5'b01000,
+                            5'b01000,
+                            5'b10000};
             default: glyph = 35'd0;          // CH_SP (blank) and unused codes
         endcase
     end
@@ -235,7 +284,7 @@ module char_cell (
     input  [5:0] y,             // pixel row being asked about
     input  [6:0] x0,            // this character's leftmost column
     input  [5:0] y0,            // this character's top row
-    input  [4:0] code,          // which character to draw here
+    input  [5:0] code,          // which character to draw here
     output       on             // 1 = this pixel is lit
     );
 

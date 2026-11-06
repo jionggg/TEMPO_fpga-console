@@ -5,9 +5,11 @@
 // Each sprite is 16 px wide x 8 px tall: one 16-bit row per line, top row first,
 // leftmost pixel = bit 15. A 1 is a lit pixel, so you can see the picture in the 1s.
 //   SPR_NOTE   piano (any key): an eighth note
-//   SPR_HIHAT  drum lane 0 (crash / hi-hat): two cymbals on a stand
-//   SPR_SNARE  drum lane 1: a snare drum with two sticks
-//   SPR_KICK   drum lane 2 (bass): the kick drum's front head
+//   SPR_KICK   drums (any lane): the bass drum's front head
+// Not shown since v0.04 (every drum lane uses SPR_KICK, the lane label names the drum),
+// kept in case we want them back:
+//   SPR_HIHAT  two hi-hat cymbals on a stand
+//   SPR_SNARE  a snare drum with two sticks
 // Pure lookup table (combinational), like font_rom.
 //////////////////////////////////////////////////////////////////////////////////
 
