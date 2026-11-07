@@ -16,6 +16,8 @@
 //               scene_text.v, sprite_rom.v, hit_log.v
 //
 // Revision:
+// Revision 0.06 - the wrong-press bar grows from the white line when the press is reported
+//                 (one row per 32 ms, for one tile period) instead of appearing whole
 // Revision 0.05 - wrong presses: a press that did not hit a tile in its own lane leaves a
 //                 burgundy slice in the lane actually played (press_track + wrong_log, from
 //                 Annanya's raw reports); a MISS no longer paints the due tile

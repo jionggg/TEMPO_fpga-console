@@ -165,6 +165,7 @@ module tb_scenes;
         game_state = ST_PLAYING;
         repeat (5) @(posedge clk);
         song_time_ms = 18'd1850;
+        // (both wrong presses are reported at song time 1850, so their bars start there)
         // piano: C was due at 1800 but D4 was played at 1790. Pei Ling marks the C tile
         // MISS with the wrong key's time; the burgundy slice goes in the D lane.
         press(0, 4'd2, 18'd1790);
@@ -173,7 +174,8 @@ module tb_scenes;
         // in the BASS lane. The hi-hat due at 1600 was never hit: duet 2 not in sync.
         press(1, 4'd1, 18'd1780);
         judge(1, DRUM_CRASH, GRADE_MISS, 18'd1600, 18'd0, 8'd2, 1, 0);
-        song_time_ms = 18'd2000;    dump("wrong");
+        song_time_ms = 18'd2000;    dump("wrong");          // 150 ms after the reports: half grown
+        song_time_ms = 18'd2200;    dump("wrong2");         // 350 ms: full 8 rows, sliding down
 
         // ---- RESULTS: tallies from a short game (SYNC'D 02/03) ----
         judge(0, NOTE_D, GRADE_MISS,    18'd2200, 18'd0,    8'd3, 0, 0);

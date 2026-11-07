@@ -13,8 +13,12 @@
 // (timing error) is faint.
 //
 // Wrong presses (v0.05): a key or drum that was played but did not hit a tile in its
-// own lane (wrong key, extra hit, nothing due) leaves a burgundy slice of the same size,
-// in the lane that was actually played, falling the same way.
+// own lane (wrong key, extra hit, nothing due) leaves a burgundy bar in the lane that was
+// actually played. v0.06: the bar is not drawn all at once. It starts empty at the white
+// line when the press is reported and drags down one row every 32 ms, like paint from a
+// held brush, for one tile period (256 ms = 8 rows); then the finished bar slides away.
+// (Annanya reports only when a note starts, not when it is let go, so the bar always
+// runs for the full tile period.)
 //
 // Modules in this file:
 //   hit_log      4 records per player, written on each PERFECT / GOOD judgement
@@ -174,15 +178,25 @@ module hit_mark #(parameter SCREEN = 0) (     // SCREEN: 0 = piano, 1 = drum
     wire in_tile = t_vis && (y <= t_ybot) && (y + TILE_H > t_ybot);
     wire in_hit  = h_vis && (y <= h_ybot) && (y + TILE_H > h_ybot);
 
-    assign on = valid && (y > HIT_Y) && in_x && in_hit;
+    // A wrong press (grade MARK_WRONG, hit = when it was reported) is a bar that grows down
+    // from the white line, one row per 32 ms, for one tile period; then it slides away
+    // whole. Its bottom edge is the report moment (h_ybot, like a hit slice); its top edge
+    // is the white line until 256 ms have passed, then 8 rows above the bottom edge.
+    // (now - hit >= 256 ms is the same as h_ahead <= 640 - 256 = 384.)
+    wire       wrong    = (grade == MARK_WRONG);
+    wire       full     = (h_ahead <= OFFSET_MS - (TILE_H << SHIFT));
+    wire [7:0] top_edge = full ? (h_ybot - TILE_H) : HIT_Y;   // last row NOT painted
+    wire       in_bar   = h_vis && (y <= h_ybot) && (y > top_edge);
+
+    assign on = valid && (y > HIT_Y) && in_x && (wrong ? in_bar : in_hit);
 
     wire [15:0] bright = (grade == GRADE_PERFECT) ? GREEN    :
                          (grade == GRADE_GOOD)    ? YELLOW   : RED;
     wire [15:0] dark   = (grade == GRADE_PERFECT) ? DK_GREEN :
                          (grade == GRADE_GOOD)    ? DK_YELLOW : DK_RED;
 
-    // a wrong press (grade MARK_WRONG) is burgundy all over: there is no tile to compare with
-    assign colour = (grade == MARK_WRONG) ? BURGUNDY :
+    // a wrong press is burgundy all over: there is no tile to compare with
+    assign colour = wrong                 ? BURGUNDY :
                     in_tile               ? bright   : dark;
 
 endmodule
@@ -247,21 +261,23 @@ module wrong_log #(parameter PLAYER = 0) (     // PLAYER: 0 = piano, 1 = drum
     wire k2 = good && rec_valid[2] && (rec_lane[8:6]  == judge_lane) && (e2 <= 18'd2);
     wire k3 = good && rec_valid[3] && (rec_lane[11:9] == judge_lane) && (e3 <= 18'd2);
 
-    // target = hit = the press time; grade MARK_WRONG makes hit_mark paint it burgundy
+    // target = when the press happened (to match Pei Ling's hit time and cross it out),
+    // hit = now, when it was reported: the burgundy bar grows from this moment.
+    // grade MARK_WRONG makes hit_mark draw the growing burgundy bar.
     hit_slot s0 (.clk(clk), .wipe(wipe), .write(press && wr == 2'd0), .cancel(k0), .song_time_ms(song_time_ms),
-        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(press_time),
+        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(song_time_ms),
         .valid(rec_valid[0]), .lane(rec_lane[2:0]), .grade(rec_grade[1:0]),
         .target(rec_target[17:0]), .hit(rec_hit[17:0]));
     hit_slot s1 (.clk(clk), .wipe(wipe), .write(press && wr == 2'd1), .cancel(k1), .song_time_ms(song_time_ms),
-        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(press_time),
+        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(song_time_ms),
         .valid(rec_valid[1]), .lane(rec_lane[5:3]), .grade(rec_grade[3:2]),
         .target(rec_target[35:18]), .hit(rec_hit[35:18]));
     hit_slot s2 (.clk(clk), .wipe(wipe), .write(press && wr == 2'd2), .cancel(k2), .song_time_ms(song_time_ms),
-        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(press_time),
+        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(song_time_ms),
         .valid(rec_valid[2]), .lane(rec_lane[8:6]), .grade(rec_grade[5:4]),
         .target(rec_target[53:36]), .hit(rec_hit[53:36]));
     hit_slot s3 (.clk(clk), .wipe(wipe), .write(press && wr == 2'd3), .cancel(k3), .song_time_ms(song_time_ms),
-        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(press_time),
+        .lane_in(press_lane), .grade_in(MARK_WRONG), .target_in(press_time), .hit_in(song_time_ms),
         .valid(rec_valid[3]), .lane(rec_lane[11:9]), .grade(rec_grade[7:6]),
         .target(rec_target[71:54]), .hit(rec_hit[71:54]));
 
