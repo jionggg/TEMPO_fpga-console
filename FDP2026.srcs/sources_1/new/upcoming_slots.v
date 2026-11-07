@@ -20,15 +20,8 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-// ============================================================================
-// upcoming_slots: the next 8 tiles for one screen, oldest (soonest) in slot 0.
-// Tiles arrive from pattern_gen in time order, so the list is a shift queue:
-//   spawn  -> written into the first empty slot (if all 8 are full, the oldest
-//             slot is dropped first; it is already past the hit line)
-//   expire -> slot 0 leaves KEEP_MS after its hit time; the rest shift down
-// ============================================================================
 module upcoming_slots #(
-    parameter integer KEEP_MS = 300          // = D's LATE_MS: missed tile keeps falling
+    parameter integer KEEP_MS = 300         
 )(
     input              clk,
     input              clear,

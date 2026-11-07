@@ -20,31 +20,8 @@
 //////////////////////////////////////////////////////////////////////////////////
 // ============================================================================
 
-// ============================================================================
-// TEMPO game FSM (top module)
-//
-//   MENU(0) --btnC--> COUNTDOWN(1) --3,2,1,GO done--> PLAYING(2) --song end--> RESULTS(4)
-//   PLAYING <--btnU--> PAUSED(3)        PAUSED --btnD--> MENU
-//   RESULTS --btnC--> MENU              rst (any state) --> MENU
-//
-// Structure
-//   ms_tick          1 kHz enable pulse from the 100 MHz clock (shared)
-//   btn_debounce x3  btnC / btnU / btnD -> clean one-clock press pulses
-//   countdown_timer  3, 2, 1, GO  (num goes to the OLED; done -> PLAYING)
-//   ms_timer         the song timer, song_time_ms
-//   song_select      independent 0..2 menu selection; up/down navigate in MENU
-//   Block 1          the ONLY place game_state changes (state transitions)
-//   Block 2          decides what every output does in each state
-//
-// Everything runs on the single 100 MHz clk. The 1 kHz tick is a clock ENABLE.
-//
-// Song timer per state: MENU cleared | COUNTDOWN held at 0 | PLAYING counts
-//                       PAUSED frozen | RESULTS stopped at song_len_ms
-// countdown_num: 3, 2, 1, 0 = GO. Only meaningful while game_state == ST_COUNTDOWN.
-// new_game:      one-clock pulse as the game leaves MENU; clear scores/combos.
-// ============================================================================
 module game_fsm #(
-    parameter integer CLKS_PER_MS = 100_000,   // 100 MHz / 1000 (use a small value in sim)
+    parameter integer CLKS_PER_MS = 100_000,   // 100 MHz / 1000 
     parameter integer DEBOUNCE_MS = 10
 )(
     input  wire        clk,
@@ -57,7 +34,7 @@ module game_fsm #(
     input  wire [17:0] song_len_ms,        // from pattern_gen
 
     output reg  [2:0]  game_state,
-    output reg  [1:0]  song_select,        // 0=existing chart, 1/2=placeholder charts
+    output reg  [1:0]  song_select,        
     output wire [17:0] song_time_ms,
     output wire [1:0]  countdown_num,
     output wire        countdown_go,
@@ -65,9 +42,6 @@ module game_fsm #(
 );
     `include "TEMPO_defs.vh"
 
-    // ------------------------------------------------------------------------
-    // Sub-modules
-    // ------------------------------------------------------------------------
     wire tick_1ms;
     wire c_press, u_press, d_press;
     wire c_lvl,   u_lvl,   d_lvl;
@@ -133,8 +107,7 @@ module game_fsm #(
         end
     end
 
-    // Song selection is separate from game_state. Up/down navigate the three
-    // menu choices; selecting an option does not create a new game state.
+    // Song selection is separate from game_state. Up/down navigate the three menu choices; 
     // btnC has priority if it is pressed in the same cycle as up/down.
     always @(posedge clk or posedge rst) begin
         if (rst)

@@ -1,16 +1,3 @@
-// TEMPO_defs.vh | v2 | 04 Nov 2026 18:00 SGT
-// v2_Annanya: fixed TEMPO_DRUM_LANE_BASS (was DRUM_KICK, which does not exist -> compile error).
-//     A's hi-hat class is judged on the DRUM_CRASH lane (team decision 04 Nov).
-// tempo_defs.vh - str codes every module agrees on
-
-// to call this header file INSIDE a module, after the port list:
-//     `include "TEMPO_defs.vh"
-
-// each module that includes it gets its own copy of these localparams, so there is
-// no clash when one file's hardcode is edited. 
-// use the names (eg DRUM_SNARE), not the raw numbers (3'd1), so tht changes
-// here reaches everyone's modules
-
 // game_state [2:0] - written only by Meiyi's game_fsm
 localparam [2:0] ST_MENU      = 3'd0,     
                  ST_COUNTDOWN = 3'd1,
@@ -67,15 +54,35 @@ localparam integer SONG_END_PADDING_MS = 200;
 // Song chart timing
 // ---------------------------------------------------------------------------
 
-localparam integer TOTAL_NOTES           = 62;
-localparam integer START_TIME_MS         = 1000;
-localparam integer BEAT_INTERVAL_MS     = 800;
-localparam integer LAST_NOTE_BEAT_OFFSET = 62;
-localparam integer LAST_NOTE_TIME_MS    = START_TIME_MS +
-                                           (LAST_NOTE_BEAT_OFFSET *
-                                            BEAT_INTERVAL_MS);
+localparam integer START_TIME_MS     = 1000;
+localparam integer BEAT_INTERVAL_MS = 800;
 
-// Derived fractional beat values used by song_rom.
+localparam integer S0_TOTAL_NOTES           = 17;
+localparam integer S0_LAST_NOTE_BEAT_OFFSET = 14;
+localparam integer S0_LAST_NOTE_TIME_MS     = START_TIME_MS +
+                                              (S0_LAST_NOTE_BEAT_OFFSET *
+                                               BEAT_INTERVAL_MS);
+localparam [17:0] S0_LENGTH_MS = S0_LAST_NOTE_TIME_MS +
+                                  SONG_END_PADDING_MS;
+
+localparam integer S1_TOTAL_NOTES           = 49;
+localparam integer S1_LAST_NOTE_BEAT_OFFSET = 60;
+localparam integer S1_LAST_NOTE_TIME_MS     = START_TIME_MS +
+                                              (S1_LAST_NOTE_BEAT_OFFSET *
+                                               BEAT_INTERVAL_MS);
+localparam [17:0] S1_LENGTH_MS = S1_LAST_NOTE_TIME_MS +
+                                  SONG_END_PADDING_MS;
+
+localparam integer S2_TOTAL_NOTES           = 62;
+localparam integer S2_LAST_NOTE_BEAT_OFFSET = 62;
+localparam integer S2_LAST_NOTE_TIME_MS     = START_TIME_MS +
+                                              (S2_LAST_NOTE_BEAT_OFFSET *
+                                               BEAT_INTERVAL_MS);
+localparam [17:0] S2_LENGTH_MS = S2_LAST_NOTE_TIME_MS +
+                                  SONG_END_PADDING_MS;
+
+localparam integer LAST_NOTE_BEAT_OFFSET = S2_LAST_NOTE_BEAT_OFFSET;
+
 localparam integer HALF_BEAT_MS  = BEAT_INTERVAL_MS / 2;
 localparam integer FOURTH_BEAT_MS = BEAT_INTERVAL_MS / 4;
 

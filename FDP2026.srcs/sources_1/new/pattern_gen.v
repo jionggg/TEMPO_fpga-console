@@ -1,11 +1,3 @@
-// pattern_gen.v | v2 | 04 Nov 2026 22:45 SGT
-// v2 (timing fix by A for C to review; behaviour unchanged):
-//   - the song ROM output is registered (rom_data_q). rom_addr only changes on a song-clock
-//     step (once per ms at most), so the register is always up to date when it is used.
-//   - head expiry uses a registered deadline (head time + HIT_WINDOW_MS); it only counts
-//     when the registered head ID still matches the live head, so a just-popped or
-//     just-pushed head is never expired by a stale deadline (it waits 1 clock instead).
-//   v1 failed timing at 100 MHz in the full team build (paths into the queues).
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
@@ -26,34 +18,7 @@
 // Additional Comments:
 // 
 //////////////////////////////////////////////////////////////////////////////////
-// ============================================================================
 
-// ============================================================================
-// TEMPO pattern generator
-//
-// Reads the selected song ROM, creates piano/drum tile pulses, and maintains
-// independent expected-event FIFOs for piano and drums.
-//
-// A duet ROM entry is pushed into both FIFOs. This allows performance
-// evaluation to judge the piano and drum hits independently while comparing
-// their expected timestamps for synchronisation.
-//
-// INTERFACE SUMMARY
-//   -> Pei Ling (B): *_exp_*   oldest unjudged event (FIFO head), level signals
-//   <- Pei Ling (B): *_judged_id  ID of the event just judged, HIT OR MISS
-//                    (63 = none). B reports her own misses with this too.
-//                    If B is late, the head auto-expires after HIT_WINDOW_MS
-//                    so the FIFO never stalls.
-//   -> Ji Yong  (D): *_ev_*    one-clock spawn pulse, LOOKAHEAD_MS before the
-//                              hit time. Must be captured on clk (100 MHz).
-//   -> Meiyi    (C FSM): song_len_ms
-//   <- Meiyi    (C FSM): song_time_ms
-//   <- Meiyi    (C FSM): song_select, new_game, play_enable
-//
-// Lane codes come from TEMPO_defs.vh: piano NOTE_C..NOTE_G, drums
-// DRUM_CRASH / DRUM_SNARE / DRUM_KICK. DRUM_NONE is never emitted as a lane.
-// The song ROM currently uses no CRASH.
-// ============================================================================
 module pattern_gen (
     input  wire        clk,
     input  wire        rst,
@@ -94,35 +59,22 @@ module pattern_gen (
 );
     `include "TEMPO_defs.vh"
 
-    // Song 0 is Hot Cross Buns, song 1 is Lightly Row, and song 2 is
-    // Ode to Joy (the original chart moved to song_rom_3).
-    localparam [6:0] SONG0_EVENT_COUNT = 7'd17;
-    localparam [6:0] SONG1_EVENT_COUNT = 7'd49;
-    localparam [6:0] SONG2_EVENT_COUNT = TOTAL_NOTES;
-    localparam [17:0] SONG0_LENGTH_MS = START_TIME_MS +
-                                        (16 * BEAT_INTERVAL_MS) +
-                                        SONG_END_PADDING_MS;
-    localparam [17:0] SONG1_LENGTH_MS = START_TIME_MS +
-                                        (48 * BEAT_INTERVAL_MS) +
-                                        SONG_END_PADDING_MS;
-    localparam [17:0] SONG2_LENGTH_MS = LAST_NOTE_TIME_MS +
-                                        SONG_END_PADDING_MS;
-
+    // Song 0 is Hot Cross Buns, song 1 is Lightly Row, and song 2 is Ode to Joy 
     reg [6:0] selected_event_count;
     reg [17:0] selected_song_length;
     always @* begin
         case (song_select)
             2'd1: begin
-                selected_event_count = SONG1_EVENT_COUNT;
-                selected_song_length = SONG1_LENGTH_MS;
+                selected_event_count = S1_TOTAL_NOTES;
+                selected_song_length = S1_LENGTH_MS;
             end
             2'd2: begin
-                selected_event_count = SONG2_EVENT_COUNT;
-                selected_song_length = SONG2_LENGTH_MS;
+                selected_event_count = S2_TOTAL_NOTES;
+                selected_song_length = S2_LENGTH_MS;
             end
             default: begin
-                selected_event_count = SONG0_EVENT_COUNT;
-                selected_song_length = SONG0_LENGTH_MS;
+                selected_event_count = S0_TOTAL_NOTES;
+                selected_song_length = S0_LENGTH_MS;
             end
         endcase
     end
@@ -134,7 +86,7 @@ module pattern_gen (
     reg  [5:0]  rom_addr;
     wire [31:0] rom0_data, rom1_data, rom2_data;
     reg  [31:0] rom_data;
-    reg  [31:0] rom_data_q = 32'd0;       // v2: registered ROM output
+    reg  [31:0] rom_data_q = 32'd0;      
 
     song_rom u_song0 (
         .addr(rom_addr),
@@ -406,3 +358,4 @@ module pattern_gen (
         end
     end
 endmodule
+

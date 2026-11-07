@@ -1,12 +1,4 @@
-// event_queue.v | v2 | 04 Nov 2026 22:45 SGT
-// v2 (timing fix by A for C to review; behaviour unchanged):
-//   - clear is now a plain synchronous clear: "if (rst) ... else if (clear) ...".
-//     v1 had "if (rst || clear)" inside an async-reset block, which mixes a synchronous
-//     signal into the reset condition.
-//   - the four memories are written in their own clocked block (no reset), so Vivado
-//     can build them from LUT RAM instead of hundreds of flip-flops. A push is ignored
-//     during rst or clear, exactly as in v1.
-//   v1 failed timing at 100 MHz in the full team build (paths into the memories).
+
 `timescale 1ns / 1ps
 
 // FIFO for expected events awaiting judgement.
