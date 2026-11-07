@@ -20,19 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 `timescale 1ns / 1ps
-// ============================================================================
-// countdown_timer - 3, 2, 1, GO
-//
-// While `enable` is low it parks at the start value (3) and does nothing.
-// While `enable` is high it shows 3, 2, 1 for COUNTDOWN_STEP_MS each, then GO
-// for GO_DISPLAY_MS (GO_DISPLAY_MS must be >= 1), then pulses `done` once.
-//
-//   num[1:0] : 3, 2, 1, or 0 = GO        (sent to the OLED via game_fsm)
-//   go       : high while GO is shown (num == 0)
-//   done     : ONE-clock pulse when the GO display has finished
-//
-// Runs on the 100 MHz clock; time advances on the shared 1 kHz tick_1ms.
-// ============================================================================
+
 module countdown_timer (
     input  wire       clk,
     input  wire       rst,

@@ -19,10 +19,6 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-// ============================================================================
-// score_keeper: score and combo per player from B's judgements.
-// judge_pulse and sync_pulse come from B in the same clock for a duet.
-// ============================================================================
 module score_keeper (
     input              clk,
     input              clear,

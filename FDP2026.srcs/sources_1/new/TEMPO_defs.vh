@@ -67,13 +67,30 @@ localparam integer SONG_END_PADDING_MS = 200;
 // Song chart timing
 // ---------------------------------------------------------------------------
 
-localparam integer TOTAL_NOTES           = 62;
 localparam integer START_TIME_MS         = 1000;
-localparam integer BEAT_INTERVAL_MS     = 800;
 localparam integer LAST_NOTE_BEAT_OFFSET = 62;
-localparam integer LAST_NOTE_TIME_MS    = START_TIME_MS +
+localparam integer BEAT_INTERVAL_MS     = 800;
+
+localparam integer S0_TOTAL_NOTES           = 17;
+localparam integer S0_LAST_NOTE_TIME_MS    = START_TIME_MS +
                                            (LAST_NOTE_BEAT_OFFSET *
                                             BEAT_INTERVAL_MS);
+localparam [17:0] S0_LENGTH_MS          = S0_LAST_NOTE_TIME_MS +
+                                        SONG_END_PADDING_MS;
+                                            
+localparam integer S1_TOTAL_NOTES           = 49;
+localparam integer S1_LAST_NOTE_TIME_MS    = START_TIME_MS +
+                                           (LAST_NOTE_BEAT_OFFSET *
+                                            BEAT_INTERVAL_MS);
+localparam [17:0] S1_LENGTH_MS          = S1_LAST_NOTE_TIME_MS +
+                                        SONG_END_PADDING_MS;
+                                            
+localparam integer S2_TOTAL_NOTES           = 62;
+localparam integer S2_LAST_NOTE_TIME_MS    = START_TIME_MS +
+                                           (LAST_NOTE_BEAT_OFFSET *
+                                            BEAT_INTERVAL_MS); 
+localparam [17:0] S2_LENGTH_MS          = S2_LAST_NOTE_TIME_MS +
+                                        SONG_END_PADDING_MS;                                          
 
 // Derived fractional beat values used by song_rom.
 localparam integer HALF_BEAT_MS  = BEAT_INTERVAL_MS / 2;

@@ -19,11 +19,6 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-
-// Lightly Row chart for menu selection 1 (song_rom_2).
-// Piano pitches are restricted to C, D, E, F, and G.
-// Simplified chart rhythm: one event per beat; a light drum hit is paired
-// with every fourth piano event. Event IDs are 0 through 48.
 module song_rom_2 (
     input  wire [5:0]  addr,
     output reg  [31:0] event_data

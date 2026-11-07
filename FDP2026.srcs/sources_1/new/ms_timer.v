@@ -20,7 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 // ============================================================================
-// ms_timer - reusable millisecond up-counter (song timer, countdown phase timer)
+// ms_timer - millisecond up-counter (song timer, countdown phase timer)
 //
 // Runs on the 100 MHz system clock and advances only on `tick_1ms`
 // (a clock ENABLE, not a separate clock).

@@ -19,16 +19,8 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-
 `timescale 1ns / 1ps
-// ============================================================================
-// btn_debounce - push-button debouncer.
-//   1. two-flop synchroniser (button is asynchronous to clk)
-//   2. debounce: the synchronised input must differ from the current stable
-//      level for DEBOUNCE_MS consecutive milliseconds before it is accepted
-//   3. `pressed` is a ONE-clock pulse on each debounced press (rising edge)
-// `level` is the debounced button level, if anyone needs it.
-// ============================================================================
+
 module btn_debounce #(
     parameter integer DEBOUNCE_MS = 10
 )(
