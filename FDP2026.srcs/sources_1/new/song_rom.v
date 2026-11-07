@@ -45,8 +45,7 @@ module song_rom (
         end
     endfunction
 
-    // 17-note melody: E D C | E D C | C C C C | D D D D | E D C.
-    // A simple bass/snare pulse is paired with every second piano note.
+    // 17-note melody: E D C | E D C | C C C C | D D D D | E D C
     always @* begin
         case (addr)
             6'd0:  event_data = make_event(START_TIME_MS + (0  * BEAT_INTERVAL_MS), EVENT_DUET,  NOTE_E, DRUM_BASS,  6'd0);

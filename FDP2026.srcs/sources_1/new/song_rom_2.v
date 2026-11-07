@@ -37,7 +37,6 @@ module song_rom_2 (
         end
     endfunction
 
-    // Melody from the C-position Lightly Row arrangement:
     // G E E | F D D | C D E F G G G | ...
     always @* begin
         case (addr)
@@ -77,13 +76,13 @@ module song_rom_2 (
             6'd33: event_data = make_event(START_TIME_MS + (42 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_SNARE, 6'd33);
             6'd34: event_data = make_event(START_TIME_MS + (43 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_SNARE, 6'd34);
             6'd35: event_data = make_event(START_TIME_MS + (44 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_BASS, 6'd35);
-            6'd36: event_data = make_event(START_TIME_MS + (45 * BEAT_INTERVAL_MS), EVENT_DUET, NOTE_F, DRUM_NONE, 6'd36);
-            6'd37: event_data = make_event(START_TIME_MS + (46 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_G, DRUM_SNARE, 6'd37);
+            6'd36: event_data = make_event(START_TIME_MS + (45 * BEAT_INTERVAL_MS), EVENT_DUET, NOTE_F, DRUM_SNARE, 6'd36);
+            6'd37: event_data = make_event(START_TIME_MS + (46 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_G, DRUM_CRASH, 6'd37);
             6'd38: event_data = make_event(START_TIME_MS + (48 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_G, DRUM_BASS, 6'd38);
-            6'd39: event_data = make_event(START_TIME_MS + (49 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_NONE, 6'd39);
+            6'd39: event_data = make_event(START_TIME_MS + (49 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_SNARE, 6'd39);
             6'd40: event_data = make_event(START_TIME_MS + (50 * BEAT_INTERVAL_MS), EVENT_DUET, NOTE_E, DRUM_SNARE, 6'd40);
             6'd41: event_data = make_event(START_TIME_MS + (52 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_F, DRUM_BASS, 6'd41);
-            6'd42: event_data = make_event(START_TIME_MS + (53 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_D, DRUM_NONE, 6'd42);
+            6'd42: event_data = make_event(START_TIME_MS + (53 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_D, DRUM_SNARE, 6'd42);
             6'd43: event_data = make_event(START_TIME_MS + (54 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_D, DRUM_SNARE, 6'd43);
             6'd44: event_data = make_event(START_TIME_MS + (56 * BEAT_INTERVAL_MS), EVENT_DUET, NOTE_C, DRUM_BASS, 6'd44);
             6'd45: event_data = make_event(START_TIME_MS + (57 * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_NONE, 6'd45);
