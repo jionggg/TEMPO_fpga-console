@@ -16,6 +16,11 @@
 //               scene_text.v, sprite_rom.v, hit_log.v
 //
 // Revision:
+// Revision 0.06 - the wrong-press bar grows from the white line when the press is reported
+//                 (one row per 32 ms, for one tile period) instead of appearing whole
+// Revision 0.05 - wrong presses: a press that did not hit a tile in its own lane leaves a
+//                 burgundy slice in the lane actually played (press_track + wrong_log, from
+//                 Annanya's raw reports); a MISS no longer paints the due tile
 // Revision 0.04 - song menu (song_select), lane labels under the white line, bass sprite
 //                 for every drum lane, 3 px progress bar, SYNC'D line + results count,
 //                 drummer score left / pianist right on both screens with a green flash
@@ -31,8 +36,9 @@
 //   MENU       TEMPO title, PIANO / DRUMS, EASY / NORMAL / HARD (song_select), PRESS START
 //   COUNTDOWN  empty field + ribbon, big outlined 3, 2, 1, GO; no tiles yet
 //   PLAYING    top layer first: ribbon, judgement word and SYNC'D, hit sprite (under the
-//              white line), hit colour (under the line), falling tiles, hit line (gold
-//              after a good sync), lane labels, pads, lane dividers, black
+//              white line), hit colour and then wrong-press burgundy (under the line),
+//              falling tiles, hit line (gold after a good sync), lane labels, pads,
+//              lane dividers, black
 //   PAUSED     the PLAYING picture at half brightness, PAUSED / U RESUME / D QUIT on top
 //   RESULTS    ribbon (final scores) + RESULTS, SYNC'D nn/tt, my PERFECT / GOOD / MISS, PRESS C
 // sw[0] up = test mode: the mocks stand in for Meiyi and Pei Ling and the PLAYING
@@ -78,6 +84,14 @@ module display_top (
     input              sync_pulse,
     input              sync_ok,
     input  [7:0]       sync_id,         // which duet the sync result is for
+    // from Annanya (raw reports, the same wires Pei Ling gets): for wrong presses
+    input              note_valid,
+    input  [3:0]       note_code,       // 1..8 = C4 D4 E4 F4 G4 A4 B4 C5
+    input  [31:0]      note_timestamp,  // sample number (16 per ms)
+    input              drum_valid,
+    input  [2:0]       drum_type,       // 1 kick, 2 snare, 3 hi-hat
+    input  [31:0]      drum_timestamp,
+    input  [31:0]      sample_tick,     // current sample number
     // OLED drivers
     input  [12:0]      pno_index,
     output [15:0]      pno_colour,
@@ -112,6 +126,9 @@ module display_top (
     wire [15:0]  mock_pno_score, mock_drm_score;
     wire [3:0]   mock_mult;
     wire [11:0]  mock_buff_ms_left;
+    wire         mock_pno_press, mock_drm_press;
+    wire [2:0]   mock_pno_press_lane, mock_drm_press_lane;
+    wire [17:0]  mock_pno_press_time, mock_drm_press_time;
 
     mock_judge mock_j (
         .clk(clk), .rst(rst), .ms_tick(ms_tick), .enable(sw_mock),
@@ -121,6 +138,8 @@ module display_top (
         .judge_target_ms(mock_judge_target), .judge_hit_ms(mock_judge_hit),
         .judge_id(mock_judge_id),       .sync_id(mock_sync_id),
         .sync_pulse(mock_sync_pulse),   .sync_ok(mock_sync_ok),
+        .pno_press(mock_pno_press), .pno_press_lane(mock_pno_press_lane), .pno_press_time(mock_pno_press_time),
+        .drm_press(mock_drm_press), .drm_press_lane(mock_drm_press_lane), .drm_press_time(mock_drm_press_time),
         .pno_score(mock_pno_score),     .drm_score(mock_drm_score),
         .mult(mock_mult),               .buff_ms_left(mock_buff_ms_left)
     );
@@ -297,6 +316,49 @@ module display_top (
         .rec_hit(d_rec_hit), .rec_grade(d_rec_grade)
     );
 
+    // ---- Wrong presses: every press, minus the ones Pei Ling grades as hits ----
+    // Real presses come from Annanya's raw reports (only while PLAYING), mock ones from
+    // mock_judge when sw[0] is up.
+    wire        real_pno_press, real_drm_press;
+    wire [2:0]  real_pno_lane,  real_drm_lane;
+    wire [17:0] real_pno_time,  real_drm_time;
+    press_track presses (
+        .clk(clk), .playing(!sw_mock && game_state == ST_PLAYING), .song_time_ms(song_time_ms),
+        .note_valid(note_valid), .note_code(note_code), .note_timestamp(note_timestamp),
+        .drum_valid(drum_valid), .drum_type(drum_type), .drum_timestamp(drum_timestamp),
+        .sample_tick(sample_tick),
+        .pno_press(real_pno_press), .pno_lane(real_pno_lane), .pno_time(real_pno_time),
+        .drm_press(real_drm_press), .drm_lane(real_drm_lane), .drm_time(real_drm_time)
+    );
+    wire        use_pno_press = sw_mock ? mock_pno_press      : real_pno_press;
+    wire [2:0]  use_pno_plane = sw_mock ? mock_pno_press_lane : real_pno_lane;
+    wire [17:0] use_pno_ptime = sw_mock ? mock_pno_press_time : real_pno_time;
+    wire        use_drm_press = sw_mock ? mock_drm_press      : real_drm_press;
+    wire [2:0]  use_drm_plane = sw_mock ? mock_drm_press_lane : real_drm_lane;
+    wire [17:0] use_drm_ptime = sw_mock ? mock_drm_press_time : real_drm_time;
+
+    wire [3:0]  p_wr_valid, d_wr_valid;
+    wire [11:0] p_wr_lane,  d_wr_lane;
+    wire [71:0] p_wr_target, d_wr_target, p_wr_hit, d_wr_hit;
+    wire [7:0]  p_wr_grade, d_wr_grade;
+
+    wrong_log #(.PLAYER(0)) pno_wrong (
+        .clk(clk), .clear(new_round), .song_time_ms(use_song_time),
+        .press(use_pno_press), .press_lane(use_pno_plane), .press_time(use_pno_ptime),
+        .judge_pulse(use_judge_pulse), .judge_player(use_judge_player),
+        .judge_lane(use_judge_lane), .judge_grade(use_judge_grade), .judge_hit_ms(use_judge_hit),
+        .rec_valid(p_wr_valid), .rec_lane(p_wr_lane), .rec_target(p_wr_target),
+        .rec_hit(p_wr_hit), .rec_grade(p_wr_grade)
+    );
+    wrong_log #(.PLAYER(1)) drm_wrong (
+        .clk(clk), .clear(new_round), .song_time_ms(use_song_time),
+        .press(use_drm_press), .press_lane(use_drm_plane), .press_time(use_drm_ptime),
+        .judge_pulse(use_judge_pulse), .judge_player(use_judge_player),
+        .judge_lane(use_judge_lane), .judge_grade(use_judge_grade), .judge_hit_ms(use_judge_hit),
+        .rec_valid(d_wr_valid), .rec_lane(d_wr_lane), .rec_target(d_wr_target),
+        .rec_hit(d_wr_hit), .rec_grade(d_wr_grade)
+    );
+
 
     // rotate 180 degrees by reversing px order
     localparam ROTATE_PNO = 0, ROTATE_DRM = 1;
@@ -318,6 +380,8 @@ module display_top (
         .spr_on(pno_spr_on),
         .rec_valid(p_rec_valid), .rec_lane(p_rec_lane), .rec_target(p_rec_target),
         .rec_hit(p_rec_hit), .rec_grade(p_rec_grade),
+        .wr_valid(p_wr_valid), .wr_lane(p_wr_lane), .wr_target(p_wr_target),
+        .wr_hit(p_wr_hit), .wr_grade(p_wr_grade),
         .perfect_d(p_perf_d[7:0]), .good_d(p_good_d[7:0]), .miss_d(p_miss_d[7:0]),
         .sync_d(sync_d[7:0]), .sync_total_d(duets_d[7:0]),
         .colour(pno_colour)
@@ -337,6 +401,8 @@ module display_top (
         .spr_on({2'b00, drm_spr_on}),
         .rec_valid(d_rec_valid), .rec_lane(d_rec_lane), .rec_target(d_rec_target),
         .rec_hit(d_rec_hit), .rec_grade(d_rec_grade),
+        .wr_valid(d_wr_valid), .wr_lane(d_wr_lane), .wr_target(d_wr_target),
+        .wr_hit(d_wr_hit), .wr_grade(d_wr_grade),
         .perfect_d(d_perf_d[7:0]), .good_d(d_good_d[7:0]), .miss_d(d_miss_d[7:0]),
         .sync_d(sync_d[7:0]), .sync_total_d(duets_d[7:0]),
         .colour(drm_colour)
@@ -374,6 +440,11 @@ module screen_layout #(parameter SCREEN = 0) (
     input      [71:0]     rec_target,
     input      [71:0]     rec_hit,
     input      [7:0]      rec_grade,
+    input      [3:0]      wr_valid,       // this player's 4 recent wrong presses (wrong_log)
+    input      [11:0]     wr_lane,
+    input      [71:0]     wr_target,
+    input      [71:0]     wr_hit,
+    input      [7:0]      wr_grade,
     input      [7:0]      perfect_d,      // results: 2 decimal digits each
     input      [7:0]      good_d,
     input      [7:0]      miss_d,
@@ -468,8 +539,25 @@ module screen_layout #(parameter SCREEN = 0) (
     hit_mark #(.SCREEN(SCREEN)) hm3 (.x(x), .y(y), .song_time_ms(song_time_ms),
         .valid(rec_valid[3]), .lane(rec_lane[11:9]), .grade(rec_grade[7:6]),
         .target(rec_target[71:54]), .hit(rec_hit[71:54]), .on(m3), .colour(c3));
-    wire        mark_on     = m0 | m1 | m2 | m3;
-    wire [15:0] mark_colour = m0 ? c0 : m1 ? c1 : m2 ? c2 : c3;
+    // the 4 recent wrong presses: the same slices, burgundy, in the lane actually played
+    wire        n0, n1, n2, n3;
+    wire [15:0] b0, b1, b2, b3;
+    hit_mark #(.SCREEN(SCREEN)) wm0 (.x(x), .y(y), .song_time_ms(song_time_ms),
+        .valid(wr_valid[0]), .lane(wr_lane[2:0]),  .grade(wr_grade[1:0]),
+        .target(wr_target[17:0]),  .hit(wr_hit[17:0]),  .on(n0), .colour(b0));
+    hit_mark #(.SCREEN(SCREEN)) wm1 (.x(x), .y(y), .song_time_ms(song_time_ms),
+        .valid(wr_valid[1]), .lane(wr_lane[5:3]),  .grade(wr_grade[3:2]),
+        .target(wr_target[35:18]), .hit(wr_hit[35:18]), .on(n1), .colour(b1));
+    hit_mark #(.SCREEN(SCREEN)) wm2 (.x(x), .y(y), .song_time_ms(song_time_ms),
+        .valid(wr_valid[2]), .lane(wr_lane[8:6]),  .grade(wr_grade[5:4]),
+        .target(wr_target[53:36]), .hit(wr_hit[53:36]), .on(n2), .colour(b2));
+    hit_mark #(.SCREEN(SCREEN)) wm3 (.x(x), .y(y), .song_time_ms(song_time_ms),
+        .valid(wr_valid[3]), .lane(wr_lane[11:9]), .grade(wr_grade[7:6]),
+        .target(wr_target[71:54]), .hit(wr_hit[71:54]), .on(n3), .colour(b3));
+
+    // real hits are drawn over wrong presses where they overlap
+    wire        mark_on     = m0 | m1 | m2 | m3 | n0 | n1 | n2 | n3;
+    wire [15:0] mark_colour = m0 ? c0 : m1 ? c1 : m2 ? c2 : m3 ? c3 : BURGUNDY;
 
     // ---- under the white line: the hit sprite of a lane that was just hit ----
     // piano: an eighth note in every lane; drums: the bass drum in every lane

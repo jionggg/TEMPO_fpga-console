@@ -178,6 +178,8 @@ endmodule
 // song as its hit time arrives, with made-up grades:
 //   piano: PERFECT, but GOOD on beats 2, 6, 10, ... and MISS on beats 7, 15, 23, ...
 //   drums: PERFECT on the bass, GOOD on hi-hat and snare, MISS on beats 6, 14, 22, ...
+//   wrong presses: on every MISS the player "plays" the next lane over instead
+//   (piano 20 ms after the beat, drums 30 ms after), so the burgundy slice shows
 //   every 4th beat is a sync pair, graded in a cycle of 16 beats:
 //   PERFECT, GOOD, MISS, MISS   (so buffs start, grow, run out and come back)
 // Scores: PERFECT = 100 x mult, GOOD = 50 x mult, MISS = 0.
@@ -206,6 +208,13 @@ module mock_judge (
     output reg         sync_pulse   = 0,
     output reg         sync_ok      = 0,
     output reg [7:0]   sync_id      = 0,
+    // like display_top's press_track: a press that did not hit its own lane
+    output reg         pno_press      = 0,
+    output reg [2:0]   pno_press_lane = 0,
+    output reg [17:0]  pno_press_time = 0,
+    output reg         drm_press      = 0,
+    output reg [2:0]   drm_press_lane = 0,
+    output reg [17:0]  drm_press_time = 0,
     // like Meiyi's outputs
     output reg [15:0]  pno_score    = 0,
     output reg [15:0]  drm_score    = 0,
@@ -262,6 +271,8 @@ module mock_judge (
     always @(posedge clk) begin
         judge_pulse <= 0;               // pulses last one clock unless set below
         sync_pulse  <= 0;
+        pno_press   <= 0;
+        drm_press   <= 0;
 
         if (rst || !enable) begin
             beat <= 0;  step <= 0;
@@ -290,6 +301,11 @@ module mock_judge (
                               judge_hit_ms    <= (pno_grade == GRADE_MISS) ? 18'd0 : beat_ms + pno_off - 18'd200;
                               judge_id     <= {2'b00, beat[5:0]};
                               pno_score    <= pno_score + pno_points;
+                              if (pno_grade == GRADE_MISS) begin       // wrong key: next lane up
+                                  pno_press      <= 1;
+                                  pno_press_lane <= (pno_lane == 3'd4) ? 3'd0 : pno_lane + 3'd1;
+                                  pno_press_time <= beat_ms + 18'd20;
+                              end
                           end
                           step <= 2'd2;
                       end
@@ -303,6 +319,11 @@ module mock_judge (
                               judge_hit_ms    <= (drm_grade == GRADE_MISS) ? 18'd0 : beat_ms + drm_off - 18'd200;
                               judge_id     <= {2'b00, beat[5:0]};
                               drm_score    <= drm_score + drm_points;
+                              if (drm_grade == GRADE_MISS) begin       // wrong drum: next lane over
+                                  drm_press      <= 1;
+                                  drm_press_lane <= (drm_lane == 3'd2) ? 3'd0 : drm_lane + 3'd1;
+                                  drm_press_time <= beat_ms + 18'd30;
+                              end
                           end
                           step <= 2'd3;
                       end

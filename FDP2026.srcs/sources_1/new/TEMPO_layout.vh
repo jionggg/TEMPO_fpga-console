@@ -45,6 +45,7 @@ localparam FX_MS   = 250;     // judgement word, SYNC'D, hit sprite, gold line, 
 localparam SPRITE_Y0 = 56;    // sprites are 16 x 8: rows 56..63
 localparam [5:0] LABEL_Y = 6'd57;    // lane labels (C..G, HAT / SNARE / BASS): rows 57..63
 localparam MARK_MS   = 520;   // a hit's colour is kept until it has scrolled off the bottom
+localparam [1:0] MARK_WRONG = 2'd3;  // hit_mark grade code for a wrong press (grades use 0..2)
 
 // Colours (RGB565)
 localparam [15:0] BLACK   = 16'h0000,
@@ -61,6 +62,7 @@ localparam [15:0] BLACK   = 16'h0000,
                   RED     = 16'hF800,   // MISS
                   GOLD    = 16'hFEA0,   // hit line flash on a good sync
                   LABEL   = 16'hC618,   // lane labels under the white line (light grey)
+                  BURGUNDY = 16'h8004,  // a wrong press under the white line (#800020)
                   DK_GREEN  = 16'h03E0, // half-bright shades: the part of a hit that
                   DK_YELLOW = 16'h7BE0, //   lies outside its target tile (early / late)
                   DK_RED    = 16'h7800;
