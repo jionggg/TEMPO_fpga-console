@@ -81,6 +81,8 @@ module tb_display_top;
         .judge_grade(judge_grade), .judge_lane(judge_lane),
         .judge_target_ms(18'd0), .judge_hit_ms(18'd0), .judge_id(8'd0),
         .sync_pulse(sync_pulse), .sync_ok(sync_ok), .sync_id(8'd0),
+        .note_valid(1'b0), .note_code(4'd0), .note_timestamp(32'd0),
+        .drum_valid(1'b0), .drum_type(3'd0), .drum_timestamp(32'd0), .sample_tick(32'd0),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
         .song_select(song_select), .mult(4'd3), .buff_ms_left(12'd1500),   // x3, half a buff left

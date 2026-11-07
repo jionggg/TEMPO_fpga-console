@@ -1,4 +1,5 @@
 // My_Top_Module.v | v4 | 06 Nov 2026 SGT
+// v5 (Ji Yong): D also gets A's 7 raw signals, to show wrong presses in the lane played.
 // v4 (Ji Yong): C's difficulty output became song_select (more_songs PR); it now goes to
 //     D for the menu. D also gets B's judge_id / sync_id (green or orange SYNC'D).
 // v3: audio debug from A on the board: 7-segment (seg/dp/an, always) and LEDs when sw[1] is up.
@@ -15,6 +16,7 @@
 // TEMPO top level. WIRING ONLY: no game logic lives here.
 // v2 (drafted by A for D to review): rewired to the real A / B / C interfaces.
 //   A -> B : the 7 raw audio signals (note_*, drum_*, sample_tick); B converts them
+//   A -> D : the same 7 signals, so D can show wrong presses in the lane played
 //   C -> B : separate piano / drum expected-event heads (pno_exp_*, drm_exp_*)
 //   B -> C : pno_judged_id / drm_judged_id, judge_*, sync_*
 //   C -> B : new_game -> session_clear
@@ -197,6 +199,9 @@ module My_Top_Module (
         .judge_target_ms(judge_target_ms), .judge_hit_ms(judge_hit_ms),
         .judge_id(judge_id),
         .sync_pulse(sync_pulse), .sync_ok(sync_ok), .sync_id(sync_id),
+        .note_valid(note_valid), .note_code(note_code), .note_timestamp(note_timestamp),
+        .drum_valid(drum_valid), .drum_type(drum_type), .drum_timestamp(drum_timestamp),
+        .sample_tick(sample_tick),
         .pno_score(pno_score), .drm_score(drm_score),
         .pno_combo(pno_combo), .drm_combo(drm_combo),
         .song_select(song_select),
