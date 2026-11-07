@@ -51,9 +51,9 @@ module song_rom (
             6'd0:  event_data = make_event(START_TIME_MS + (0  * BEAT_INTERVAL_MS), EVENT_DUET,  NOTE_E, DRUM_BASS,  6'd0);
             6'd1:  event_data = make_event(START_TIME_MS + (1  * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_D, DRUM_NONE,  6'd1);
             6'd2:  event_data = make_event(START_TIME_MS + (2  * BEAT_INTERVAL_MS), EVENT_DUET,  NOTE_C, DRUM_SNARE, 6'd2);
-            6'd3:  event_data = make_event(START_TIME_MS + (4  * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_E, DRUM_BASS,  6'd3);
-            6'd4:  event_data = make_event(START_TIME_MS + (5  * BEAT_INTERVAL_MS), EVENT_DUET,  NOTE_D, DRUM_NONE,  6'd4);
-            6'd5:  event_data = make_event(START_TIME_MS + (6  * BEAT_INTERVAL_MS), EVENT_PIANO, NOTE_C, DRUM_SNARE,  6'd5);
+            6'd3:  event_data = make_event(START_TIME_MS + (4  * BEAT_INTERVAL_MS), EVENT_DUET, NOTE_E, DRUM_BASS,  6'd3);
+            6'd4:  event_data = make_event(START_TIME_MS + (5  * BEAT_INTERVAL_MS), EVENT_PIANO,  NOTE_D, DRUM_NONE,  6'd4);
+            6'd5:  event_data = make_event(START_TIME_MS + (6  * BEAT_INTERVAL_MS), EVENT_DUET, NOTE_C, DRUM_SNARE,  6'd5);
             6'd6:  event_data = make_event(START_TIME_MS + (8  * BEAT_INTERVAL_MS), EVENT_DUET,  NOTE_C, DRUM_BASS, 6'd6);
             6'd7:  event_data = make_event(START_TIME_MS + (8  * BEAT_INTERVAL_MS + HALF_BEAT_MS), EVENT_PIANO, NOTE_C, DRUM_NONE,  6'd7);
             6'd8:  event_data = make_event(START_TIME_MS + (9  * BEAT_INTERVAL_MS), EVENT_DUET,  NOTE_C, DRUM_BASS,  6'd8);
@@ -69,4 +69,5 @@ module song_rom (
         endcase
     end
 endmodule
+
 
